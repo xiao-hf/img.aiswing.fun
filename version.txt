@@ -1,0 +1,2 @@
+img.aiswing.fun backend build 2026050607
+SQLite async task queue, results stored on disk and cleaned after 48 hours. Upstream: https://cdn.aiswing.fun

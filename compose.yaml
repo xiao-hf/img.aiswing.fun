@@ -1,0 +1,31 @@
+﻿services:
+  aiswing-image-studio:
+    build: .
+    image: aiswing-image-studio:latest
+    container_name: aiswing-image-studio
+    restart: unless-stopped
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: production
+      HOST: 0.0.0.0
+      PORT: 3000
+      UPSTREAM: ${UPSTREAM:-https://cdn.aiswing.fun}
+      MAX_BODY_BYTES: ${MAX_BODY_BYTES:-62914560}
+      DATA_DIR: ${DATA_DIR:-/app/data}
+      SQLITE_PATH: ${SQLITE_PATH:-/app/data/aiswing.sqlite}
+      TASK_TTL_HOURS: ${TASK_TTL_HOURS:-48}
+      KEY_ENCRYPTION_SECRET: ${KEY_ENCRYPTION_SECRET:-change-this-secret-before-production}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
+      CLEANUP_INTERVAL_MINUTES: ${CLEANUP_INTERVAL_MINUTES:-10}
+    ports:
+      - "${HOST_PORT:-3000}:3000"
+    volumes:
+      - ./data:/app/data
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

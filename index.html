@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aiswing Image Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <main class="studio-grid">
+        <aside class="panel input-panel">
+          <div class="panel-title">
+            <span>01</span>
+            <div>
+              <h2>输入参数</h2>
+              <p>用户只需填写可用于 codexapis 的 API Key。</p>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>API Key</span>
+            <div class="secret-row">
+              <input id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" />
+              <button id="toggleKeyButton" type="button">显示</button>
+            </div>
+          </label>
+
+          <input id="baseUrlInput" type="hidden" value="" />
+
+          <div class="split-fields">
+            <label class="field">
+              <span>模型</span>
+              <select id="modelSelect">
+                <option value="gpt-image-2">GPT Image 2</option>
+                <option value="gpt-image-1">GPT Image 1</option>
+                <option value="gpt-image-1.5">GPT Image 1.5</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>尺寸</span>
+              <select id="sizeSelect">
+                <option value="1024x1024">1:1 1024</option>
+                <option value="1536x1024">3:2 Landscape</option>
+                <option value="1024x1536">2:3 Portrait</option>
+                <option value="3840x2160">4K 3840x2160</option>
+                <option value="2160x3840">4K 2160x3840</option>
+                <option value="2880x2880">Square 2880</option>
+                <option value="auto">Auto</option>
+              </select>
+            </label>
+          </div>
+
+          <div class="split-fields">
+            <label class="field">
+              <span>质量</span>
+              <select id="qualitySelect">
+                <option value="">默认</option>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="auto">Auto</option>
+              </select>
+            </label>
+            <label class="field">
+              <span>格式</span>
+              <select id="formatSelect">
+                <option value="png">PNG</option>
+                <option value="jpeg">JPEG</option>
+                <option value="webp">WEBP</option>
+              </select>
+            </label>
+          </div>
+
+          <label class="field">
+            <span>提示词</span>
+            <textarea
+              id="promptInput"
+              rows="8"
+              placeholder="例如：Generate a cute orange cat astronaut sticker on a clean pastel background."
+            ></textarea>
+          </label>
+
+          <label class="upload-card">
+            <input id="referenceInput" type="file" accept="image/*" multiple />
+            <strong>上传参考图</strong>
+            <small>可选。上传后自动使用编辑接口。</small>
+          </label>
+          <div id="referencePreviewList" class="thumb-list"></div>
+
+          <div class="button-row">
+            <button id="demoButton" class="ghost-button" type="button">填入示例</button>
+            <button id="generateButton" class="primary-button" type="button">生成图片</button>
+          </div>
+        </aside>
+
+        <section class="panel focus-panel">
+          <div class="panel-title">
+            <span>02</span>
+            <div>
+              <h2>当前任务</h2>
+              <p>单次任务提示词、状态和结果。</p>
+            </div>
+          </div>
+
+          <article class="prompt-card">
+            <div class="prompt-card-head">
+              <span id="taskModeBadge">生成模式</span>
+              <button id="copyPromptButton" class="tiny-button" type="button">复制提示词</button>
+            </div>
+            <p id="currentPrompt" class="current-prompt">等待输入提示词。</p>
+          </article>
+
+          <div id="statusBox" class="status-box idle">准备就绪。填写 API Key 后即可生成。</div>
+
+          <div id="resultStage" class="result-stage empty">
+            <div class="empty-state">
+              <span></span>
+              <h3>还没有图片</h3>
+              <p>生成完成后，图片会显示在这里并自动加入右侧任务列表。</p>
+            </div>
+          </div>
+
+          <div class="result-actions">
+            <button id="downloadButton" class="ghost-button" type="button" disabled>下载当前图</button>
+            <button id="copyCurlButton" class="ghost-button" type="button">复制 API 请求</button>
+          </div>
+        </section>
+
+        <aside class="panel queue-panel">
+          <div class="panel-title panel-title-between">
+            <div class="panel-title-main">
+              <span>03</span>
+              <div>
+                <h2>任务列表</h2>
+                <p>保存在浏览器本地缓存。</p>
+              </div>
+            </div>
+            <div class="queue-actions">
+              <a class="ghost-button nav-button" href="./docs.html">API 文档</a>
+              <button class="ghost-button" id="clearAllButton" type="button">清空</button>
+            </div>
+          </div>
+
+          <div class="queue-stats">
+            <div><strong id="taskCount">0</strong><span>任务</span></div>
+            <div><strong id="successCount">0</strong><span>成功</span></div>
+          </div>
+
+          <div id="taskList" class="task-list"></div>
+        </aside>
+      </main>
+    </div>
+
+    <template id="taskTemplate">
+      <button class="task-item" type="button">
+        <div class="task-thumb"></div>
+        <div class="task-body">
+          <strong></strong>
+          <span></span>
+        </div>
+        <em></em>
+      </button>
+    </template>
+
+    <script src="./app.js?v=2026050607"></script>
+  </body>
+</html>

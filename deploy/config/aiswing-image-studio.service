@@ -1,0 +1,21 @@
+﻿[Unit]
+Description=Aiswing Image Studio Node Backend
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/www/wwwroot/img.aiswing.fun
+Environment=NODE_ENV=production
+Environment=HOST=0.0.0.0
+Environment=PORT=3000
+Environment=UPSTREAM=https://cdn.aiswing.fun
+Environment=MAX_BODY_BYTES=62914560
+ExecStart=/usr/bin/node /www/wwwroot/img.aiswing.fun/server.js
+Restart=always
+RestartSec=3
+User=www
+Group=www
+
+[Install]
+WantedBy=multi-user.target
+

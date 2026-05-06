@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Aiswing 部署诊断</title>
+  <style>
+    body { font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; margin: 24px; background: #f7f4ea; color: #1f2933; }
+    h1 { font-size: 22px; }
+    button { padding: 10px 16px; border: 0; border-radius: 10px; background: #058879; color: #fff; font-weight: 700; cursor: pointer; }
+    .item { margin: 12px 0; padding: 14px; border-radius: 12px; background: #fff; border: 1px solid #e4ded0; }
+    .ok { border-color: #36b37e; }
+    .bad { border-color: #e55353; }
+    code, pre { white-space: pre-wrap; word-break: break-all; }
+  </style>
+</head>
+<body>
+  <h1>Aiswing 部署诊断</h1>
+  <p>用于检查静态文件是否覆盖、缓存是否更新、/v1/images 反代是否生效。</p>
+  <button id="run">开始诊断</button>
+  <div id="result"></div>
+
+  <script>
+    const result = document.getElementById("result");
+    const now = () => Date.now();
+
+    function add(title, ok, detail) {
+      const box = document.createElement("div");
+      box.className = `item ${ok ? "ok" : "bad"}`;
+      box.innerHTML = `<strong>${ok ? "✅" : "❌"} ${title}</strong><pre>${detail}</pre>`;
+      result.appendChild(box);
+    }
+
+    async function getText(url, options) {
+      const response = await fetch(url, options);
+      const text = await response.text();
+      return { response, text };
+    }
+
+    async function run() {
+      result.innerHTML = "";
+      const base = location.origin;
+      add("当前站点", true, base);
+
+      try {
+        const { response, text } = await getText(`${base}/version.txt?_=${now()}`);
+        add("version.txt 覆盖检查", response.ok && text.includes("build 2026050603"), `HTTP ${response.status}\n${text.slice(0, 500)}`);
+      } catch (error) {
+        add("version.txt 覆盖检查", false, error.message);
+      }
+
+      try {
+        const { response, text } = await getText(`${base}/app.js?_=${now()}`);
+        const ok = response.ok && text.includes("return window.location.origin") && !(text.includes("api.php") && text.includes("path="));
+        add("app.js 版本检查", ok, `HTTP ${response.status}\n包含同域模式: ${text.includes("return window.location.origin")}\n残留 api.php: ${(text.includes("api.php") && text.includes("path="))}\n长度: ${text.length}`);
+      } catch (error) {
+        add("app.js 版本检查", false, error.message);
+      }
+
+      try {
+        const { response, text } = await getText(`${base}/v1/images/generations?_=${now()}`, {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer sk-invalid-diagnose",
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "gpt-image-2",
+            prompt: "diagnose",
+            size: "1024x1024",
+            response_format: "b64_json",
+          }),
+        });
+        const proxyOk = response.status !== 404 && !text.includes("<h1>404 Not Found</h1>");
+        add("/v1/images 反代检查", proxyOk, `HTTP ${response.status}\n${text.slice(0, 800)}`);
+      } catch (error) {
+        add("/v1/images 反代检查", false, `${error.message}\n如果这里是 Failed to fetch，通常是 Worker/Nginx 反代仍未生效。`);
+      }
+    }
+
+    document.getElementById("run").addEventListener("click", run);
+    run();
+  </script>
+</body>
+</html>

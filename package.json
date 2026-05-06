@@ -1,0 +1,14 @@
+{
+  "name": "aiswing-image-studio",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.9.0"
+  }
+}

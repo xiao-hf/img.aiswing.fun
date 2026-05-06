@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Aiswing API Docs</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="docs-shell">
+      <header class="docs-hero">
+        <a class="back-link" href="./index.html">返回生图工作台</a>
+        <p class="eyebrow">Aiswing API Documentation</p>
+        <h1>生图 API 接入文档</h1>
+        <p>
+          使用 CodexApis / Responses API 兼容 Key 调用图片生成。前端请求本站同源接口，Node 后端转发到
+          <code>https://cdn.aiswing.fun</code>。
+        </p>
+      </header>
+
+      <main class="docs-grid">
+        <nav class="docs-toc panel">
+          <strong>目录</strong>
+          <a href="#quickstart">快速开始</a>
+          <a href="#generation">生成图片</a>
+          <a href="#edits">参考图编辑</a>
+          <a href="#params">参数说明</a>
+          <a href="#response">响应格式</a>
+          <a href="#errors">常见错误</a>
+        </nav>
+
+        <section class="docs-content">
+          <article id="quickstart" class="doc-card panel">
+            <h2>快速开始</h2>
+            <p>用户只需要准备一个可用于 codexapis 的 API Key，然后调用本站同源 <code>/v1/images/generations</code>。</p>
+            <pre><code>curl --location 'https://img.aiswing.fun/v1/images/generations' \
+  --header 'Authorization: Bearer sk-your-sub2api-key' \
+  --header 'Content-Type: application/json' \
+  --data '{
+    "model": "gpt-image-2",
+    "prompt": "Generate a cute orange cat astronaut sticker on a clean pastel background.",
+    "size": "3840x2160",
+    "response_format": "b64_json"
+  }'</code></pre>
+          </article>
+
+          <article id="generation" class="doc-card panel">
+            <h2>生成图片</h2>
+            <div class="endpoint-row"><span>POST</span><code>/v1/images/generations</code></div>
+            <p>适合纯文本提示词生图。请求体使用 JSON。 For 4K sizes, call this Node backend on the same origin; Node reads the upstream SSE stream and returns the first image payload.</p>
+            <pre><code>{
+  "model": "gpt-image-2",
+  "prompt": "A premium poster of a dancing woman, cinematic sunset light.",
+  "size": "3840x2160",
+  "quality": "auto",
+  "output_format": "png",
+  "response_format": "b64_json"
+}</code></pre>
+          </article>
+
+          <article id="edits" class="doc-card panel">
+            <h2>参考图编辑</h2>
+            <div class="endpoint-row"><span>POST</span><code>/v1/images/edits</code></div>
+            <p>上传参考图时使用 multipart/form-data。可以上传一张或多张图片。</p>
+            <pre><code>curl --location 'https://img.aiswing.fun/v1/images/edits' \
+  --header 'Authorization: Bearer sk-your-sub2api-key' \
+  --form 'model="gpt-image-2"' \
+  --form 'prompt="Turn this person into a fashion magazine cover."' \
+  --form 'size="1024x1024"' \
+  --form 'response_format="b64_json"' \
+  --form 'image[]=@"./reference.png"'</code></pre>
+          </article>
+
+          <article id="params" class="doc-card panel">
+            <h2>参数说明</h2>
+            <div class="param-table">
+              <div><strong>参数</strong><strong>类型</strong><strong>说明</strong></div>
+              <div><code>model</code><span>string</span><span>图片模型，例如 <code>gpt-image-2</code>。</span></div>
+              <div><code>prompt</code><span>string</span><span>必填。图片生成或编辑提示词。</span></div>
+              <div><code>size</code><span>string</span><span>Optional. Common values: <code>1024x1024</code>, <code>1536x1024</code>, <code>1024x1536</code>, <code>3840x2160</code>, <code>2160x3840</code>, <code>2880x2880</code>, <code>auto</code>.</span></div>
+              <div><code>quality</code><span>string</span><span>可选。<code>low</code>、<code>medium</code>、<code>high</code>、<code>auto</code>。</span></div>
+              <div><code>output_format</code><span>string</span><span>可选。<code>png</code>、<code>jpeg</code>、<code>webp</code>。</span></div>
+              <div><code>response_format</code><span>string</span><span>建议使用 <code>b64_json</code>，前端可直接转成图片。</span></div>
+              <div><code>image[]</code><span>file</span><span>仅编辑接口使用，表示参考图。</span></div>
+            </div>
+          </article>
+
+          <article id="response" class="doc-card panel">
+            <h2>响应格式</h2>
+            <p>成功时通常返回 <code>data[0].b64_json</code>，把 base64 解码即可得到图片。</p>
+            <pre><code>{
+  "created": 1776990000,
+  "data": [
+    {
+      "b64_json": "iVBORw0KGgoAAAANSUhEUg...",
+      "revised_prompt": "..."
+    }
+  ]
+}</code></pre>
+          </article>
+
+          <article id="errors" class="doc-card panel">
+            <h2>常见错误</h2>
+            <ul class="error-list">
+              <li><strong>401 Unauthorized</strong>：API Key 无效、被删除或没有传 Authorization。</li>
+              <li><strong>400 failed to parse request body</strong>：JSON 格式错误，检查引号和逗号。</li>
+              <li><strong>CORS error</strong>：浏览器跨域拦截，本地测试可用同域代理或临时关闭浏览器安全限制。</li>
+              <li><strong>余额未扣费</strong>：检查渠道模型定价是否配置 <code>image</code> 或 <code>per_request</code>。</li>
+              <li><strong>模型不可用</strong>：检查用户分组、渠道关联分组和模型定价列表。</li>
+            </ul>
+          </article>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

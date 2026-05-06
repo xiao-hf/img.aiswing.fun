@@ -1,0 +1,16 @@
+﻿.env
+node_modules/
+backend.out.log
+backend.err.log
+data/
+testset/
+local-dev-only/
+delivery/*.zip
+*.log
+.DS_Store
+Thumbs.db
+参考/
+delivery/node-backend-app/
+*.sqlite
+*.sqlite-*
+delivery/
