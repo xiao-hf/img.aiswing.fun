@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Aiswing API Docs</title>
+    <title>cdn.aiswing.fun 流式生图 API 文档</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -17,10 +17,10 @@
       <header class="docs-hero">
         <a class="back-link" href="./index.html">返回生图工作台</a>
         <p class="eyebrow">Aiswing API Documentation</p>
-        <h1>生图 API 接入文档</h1>
+        <h1>cdn.aiswing.fun 流式生图 API 文档</h1>
         <p>
-          使用 CodexApis / Responses API 兼容 Key 调用图片生成。前端请求本站同源接口，Node 后端转发到
-          <code>https://cdn.aiswing.fun</code>。
+          本页描述直接调用 <code>https://cdn.aiswing.fun/v1/responses</code> 的流式生图接口。
+          请求使用 Responses API 结构，工具类型为 <code>image_generation</code>，支持文生图、4K 尺寸和携带参考图。
         </p>
       </header>
 
@@ -28,91 +28,177 @@
         <nav class="docs-toc panel">
           <strong>目录</strong>
           <a href="#quickstart">快速开始</a>
-          <a href="#generation">生成图片</a>
-          <a href="#edits">参考图编辑</a>
+          <a href="#headers">请求头</a>
+          <a href="#body">请求体结构</a>
           <a href="#params">参数说明</a>
-          <a href="#response">响应格式</a>
-          <a href="#errors">常见错误</a>
+          <a href="#reference">携带参考图</a>
+          <a href="#stream">流式响应</a>
+          <a href="#errors">错误处理</a>
         </nav>
 
         <section class="docs-content">
           <article id="quickstart" class="doc-card panel">
             <h2>快速开始</h2>
-            <p>用户只需要准备一个可用于 codexapis 的 API Key，然后调用本站同源 <code>/v1/images/generations</code>。</p>
-            <pre><code>curl --location 'https://img.aiswing.fun/v1/images/generations' \
-  --header 'Authorization: Bearer sk-your-sub2api-key' \
+            <div class="endpoint-row"><span>POST</span><code>https://cdn.aiswing.fun/v1/responses</code></div>
+            <p>最小可用请求：传入提示词，启用 <code>stream: true</code>，并声明 <code>image_generation</code> 工具。</p>
+            <pre><code>curl --location 'https://cdn.aiswing.fun/v1/responses' \
+  --header 'Authorization: Bearer sk-your-cdn-key' \
   --header 'Content-Type: application/json' \
+  --header 'Accept: text/event-stream' \
   --data '{
     "model": "gpt-image-2",
-    "prompt": "Generate a cute orange cat astronaut sticker on a clean pastel background.",
-    "size": "3840x2160",
-    "response_format": "b64_json"
+    "stream": true,
+    "tools": [
+      {
+        "type": "image_generation",
+        "size": "1024x1024",
+        "quality": "high",
+        "output_format": "png"
+      }
+    ],
+    "input": [
+      {
+        "role": "user",
+        "content": [
+          {
+            "type": "input_text",
+            "text": "都市暴雨夜，一个年轻外卖员穿黄色雨衣站在霓虹街头，电影感光影，不要文字，不要水印"
+          }
+        ]
+      }
+    ]
   }'</code></pre>
           </article>
 
-          <article id="generation" class="doc-card panel">
-            <h2>生成图片</h2>
-            <div class="endpoint-row"><span>POST</span><code>/v1/images/generations</code></div>
-            <p>适合纯文本提示词生图。请求体使用 JSON。 For 4K sizes, call this Node backend on the same origin; Node reads the upstream SSE stream and returns the first image payload.</p>
-            <pre><code>{
-  "model": "gpt-image-2",
-  "prompt": "A premium poster of a dancing woman, cinematic sunset light.",
-  "size": "3840x2160",
-  "quality": "auto",
-  "output_format": "png",
-  "response_format": "b64_json"
-}</code></pre>
+          <article id="headers" class="doc-card panel">
+            <h2>请求头</h2>
+            <div class="param-table">
+              <div><strong>名称</strong><strong>必填</strong><strong>说明</strong></div>
+              <div><code>Authorization</code><span>是</span><span>格式：<code>Bearer sk-your-cdn-key</code>，使用 CDN 地址对应的 Key。</span></div>
+              <div><code>Content-Type</code><span>是</span><span>固定为 <code>application/json</code>。</span></div>
+              <div><code>Accept</code><span>建议</span><span>建议传 <code>text/event-stream</code>，表示接收 SSE 流式事件。</span></div>
+            </div>
           </article>
 
-          <article id="edits" class="doc-card panel">
-            <h2>参考图编辑</h2>
-            <div class="endpoint-row"><span>POST</span><code>/v1/images/edits</code></div>
-            <p>上传参考图时使用 multipart/form-data。可以上传一张或多张图片。</p>
-            <pre><code>curl --location 'https://img.aiswing.fun/v1/images/edits' \
-  --header 'Authorization: Bearer sk-your-sub2api-key' \
-  --form 'model="gpt-image-2"' \
-  --form 'prompt="Turn this person into a fashion magazine cover."' \
-  --form 'size="1024x1024"' \
-  --form 'response_format="b64_json"' \
-  --form 'image[]=@"./reference.png"'</code></pre>
+          <article id="body" class="doc-card panel">
+            <h2>请求体结构</h2>
+            <p>接口不是 <code>multipart/form-data</code>；即使携带参考图，也需要把图片转成 base64 data URL 后放进 JSON。</p>
+            <pre><code>{
+  "model": "gpt-image-2",
+  "stream": true,
+  "tools": [
+    {
+      "type": "image_generation",
+      "size": "3840x2160",
+      "quality": "high",
+      "output_format": "png"
+    }
+  ],
+  "input": [
+    {
+      "role": "user",
+      "content": [
+        { "type": "input_text", "text": "你的提示词" }
+      ]
+    }
+  ]
+}</code></pre>
           </article>
 
           <article id="params" class="doc-card panel">
             <h2>参数说明</h2>
             <div class="param-table">
               <div><strong>参数</strong><strong>类型</strong><strong>说明</strong></div>
-              <div><code>model</code><span>string</span><span>图片模型，例如 <code>gpt-image-2</code>。</span></div>
-              <div><code>prompt</code><span>string</span><span>必填。图片生成或编辑提示词。</span></div>
-              <div><code>size</code><span>string</span><span>Optional. Common values: <code>1024x1024</code>, <code>1536x1024</code>, <code>1024x1536</code>, <code>3840x2160</code>, <code>2160x3840</code>, <code>2880x2880</code>, <code>auto</code>.</span></div>
-              <div><code>quality</code><span>string</span><span>可选。<code>low</code>、<code>medium</code>、<code>high</code>、<code>auto</code>。</span></div>
-              <div><code>output_format</code><span>string</span><span>可选。<code>png</code>、<code>jpeg</code>、<code>webp</code>。</span></div>
-              <div><code>response_format</code><span>string</span><span>建议使用 <code>b64_json</code>，前端可直接转成图片。</span></div>
-              <div><code>image[]</code><span>file</span><span>仅编辑接口使用，表示参考图。</span></div>
+              <div><code>model</code><span>string</span><span>模型名。当前页面默认使用 <code>gpt-image-2</code>。</span></div>
+              <div><code>stream</code><span>boolean</span><span>是否流式返回。生图建议固定传 <code>true</code>。</span></div>
+              <div><code>input</code><span>array</span><span>对话输入数组。每项通常包含 <code>role: "user"</code> 和 <code>content</code>。</span></div>
+              <div><code>input[].role</code><span>string</span><span>消息角色，常用 <code>user</code>。</span></div>
+              <div><code>input[].content</code><span>array</span><span>内容数组，可同时放文本和参考图。</span></div>
+              <div><code>content[].type</code><span>string</span><span><code>input_text</code> 表示提示词文本，<code>input_image</code> 表示参考图。</span></div>
+              <div><code>content[].text</code><span>string</span><span>当 <code>type</code> 为 <code>input_text</code> 时填写提示词。</span></div>
+              <div><code>content[].image_url</code><span>string</span><span>当 <code>type</code> 为 <code>input_image</code> 时填写图片 URL 或 base64 data URL，例如 <code>data:image/png;base64,...</code>。</span></div>
+              <div><code>tools</code><span>array</span><span>工具数组。生图必须包含一个 <code>image_generation</code> 工具。</span></div>
+              <div><code>tools[].type</code><span>string</span><span>固定为 <code>image_generation</code>。</span></div>
+              <div><code>tools[].size</code><span>string</span><span>输出尺寸。常用：<code>1024x1024</code>、<code>1536x1024</code>、<code>1024x1536</code>、<code>3840x2160</code>、<code>2160x3840</code>、<code>2880x2880</code>。</span></div>
+              <div><code>tools[].quality</code><span>string</span><span>质量档位。常用：<code>auto</code>、<code>low</code>、<code>medium</code>、<code>high</code>。</span></div>
+              <div><code>tools[].output_format</code><span>string</span><span>图片格式。常用：<code>png</code>、<code>jpeg</code>、<code>webp</code>。</span></div>
+              <div><code>tools[].output_compression</code><span>number</span><span>压缩质量，通常用于 <code>jpeg</code> 或 <code>webp</code>，范围建议 <code>0-100</code>。</span></div>
             </div>
           </article>
 
-          <article id="response" class="doc-card panel">
-            <h2>响应格式</h2>
-            <p>成功时通常返回 <code>data[0].b64_json</code>，把 base64 解码即可得到图片。</p>
-            <pre><code>{
-  "created": 1776990000,
-  "data": [
-    {
-      "b64_json": "iVBORw0KGgoAAAANSUhEUg...",
-      "revised_prompt": "..."
-    }
-  ]
+          <article id="reference" class="doc-card panel">
+            <h2>携带参考图</h2>
+            <p>参考图推荐转成 base64 data URL，和提示词一起放入 <code>input[].content</code>。下面示例会读取本地图片并发起流式请求。</p>
+            <pre><code>import fs from "node:fs";
+
+const apiKey = process.env.AISWING_CDN_KEY;
+const imageBase64 = fs.readFileSync("./reference.png").toString("base64");
+
+const response = await fetch("https://cdn.aiswing.fun/v1/responses", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+    "Accept": "text/event-stream"
+  },
+  body: JSON.stringify({
+    model: "gpt-image-2",
+    stream: true,
+    tools: [
+      {
+        type: "image_generation",
+        size: "1024x1024",
+        quality: "high",
+        output_format: "png"
+      }
+    ],
+    input: [
+      {
+        role: "user",
+        content: [
+          { type: "input_text", text: "保留人物姿势，改成赛博朋克电影海报风格，不要文字，不要水印" },
+          { type: "input_image", image_url: `data:image/png;base64,${imageBase64}` }
+        ]
+      }
+    ]
+  })
+});</code></pre>
+          </article>
+
+          <article id="stream" class="doc-card panel">
+            <h2>流式响应</h2>
+            <p>响应为 SSE 文本流。生成过程中可能返回进度事件和预览图，完成时返回最终图片 base64。</p>
+            <div class="param-table">
+              <div><strong>事件 type</strong><strong>关键字段</strong><strong>说明</strong></div>
+              <div><code>response.created</code><span>-</span><span>任务已创建。</span></div>
+              <div><code>response.in_progress</code><span>-</span><span>任务处理中。</span></div>
+              <div><code>response.image_generation_call.generating</code><span>-</span><span>图片正在生成。</span></div>
+              <div><code>response.image_generation_call.partial_image</code><span><code>partial_image_b64</code></span><span>预览图 base64，可直接显示或保存。</span></div>
+              <div><code>response.completed</code><span><code>response.output[].result</code></span><span>最终图片 base64。通常取 <code>type=image_generation_call</code> 的 <code>result</code> 字段。</span></div>
+              <div><code>error</code><span><code>error.message</code></span><span>生成失败或请求参数错误。</span></div>
+            </div>
+            <pre><code>// SSE data 示例
+{
+  "type": "response.completed",
+  "response": {
+    "output": [
+      {
+        "type": "image_generation_call",
+        "result": "iVBORw0KGgoAAAANSUhEUg..."
+      }
+    ]
+  }
 }</code></pre>
           </article>
 
           <article id="errors" class="doc-card panel">
-            <h2>常见错误</h2>
+            <h2>错误处理</h2>
             <ul class="error-list">
-              <li><strong>401 Unauthorized</strong>：API Key 无效、被删除或没有传 Authorization。</li>
-              <li><strong>400 failed to parse request body</strong>：JSON 格式错误，检查引号和逗号。</li>
-              <li><strong>CORS error</strong>：浏览器跨域拦截，本地测试可用同域代理或临时关闭浏览器安全限制。</li>
-              <li><strong>余额未扣费</strong>：检查渠道模型定价是否配置 <code>image</code> 或 <code>per_request</code>。</li>
-              <li><strong>模型不可用</strong>：检查用户分组、渠道关联分组和模型定价列表。</li>
+              <li><strong>401 Unauthorized</strong>：Key 无效、额度不足、未传 <code>Authorization</code>，或使用了错误地址对应的 Key。</li>
+              <li><strong>404 Not Found</strong>：路径错误。流式生图应请求 <code>/v1/responses</code>，不是旧的 <code>/v1/images/generations</code>。</li>
+              <li><strong>Failed to fetch</strong>：浏览器跨域、网络中断或 CDN 超时。生产环境建议由后端代理请求并保存任务结果。</li>
+              <li><strong>stream ended without image data</strong>：上游流结束但没有返回图片，检查模型、尺寸、提示词和账号权限。</li>
+              <li><strong>图片太大</strong>：参考图 base64 会显著增大请求体，建议压缩后再传，并控制后端 <code>MAX_BODY_BYTES</code>。</li>
             </ul>
           </article>
         </section>
