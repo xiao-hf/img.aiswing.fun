@@ -7,6 +7,7 @@ const { URL } = require("url");
 const Database = require("better-sqlite3");
 
 const root = __dirname;
+const frontendRoot = path.join(root, "frontend");
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
@@ -42,6 +43,7 @@ const publicFiles = new Map([
   ["/app.js", "app.js"],
   ["/styles.css", "styles.css"],
   ["/docs.html", "docs.html"],
+  ["/diagnose.html", "diagnose.html"],
   ["/version.txt", "version.txt"],
   ["/favicon.ico", "favicon.ico"],
 ]);
@@ -897,7 +899,7 @@ function serveStatic(req, res, requestUrl) {
     return;
   }
 
-  const filePath = path.resolve(root, publicFile);
+  const filePath = path.resolve(frontendRoot, publicFile);
   fs.stat(filePath, (statErr, stat) => {
     if (statErr || !stat.isFile()) {
       send(res, 404, "File not found", { "Content-Type": "text/plain; charset=utf-8" });
