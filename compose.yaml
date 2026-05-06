@@ -1,4 +1,4 @@
-﻿services:
+services:
   aiswing-image-studio:
     build: .
     image: aiswing-image-studio:latest
@@ -19,6 +19,10 @@
       KEY_ENCRYPTION_SECRET: ${KEY_ENCRYPTION_SECRET:-change-this-secret-before-production}
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
       CLEANUP_INTERVAL_MINUTES: ${CLEANUP_INTERVAL_MINUTES:-10}
+      UPDATE_TOKEN: ${UPDATE_TOKEN:-}
+      UPDATE_COMMAND: ${UPDATE_COMMAND:-}
+      UPDATE_RESTART: ${UPDATE_RESTART:-true}
+      UPDATE_TIMEOUT_MS: ${UPDATE_TIMEOUT_MS:-600000}
     ports:
       - "${HOST_PORT:-3000}:3000"
     volumes:

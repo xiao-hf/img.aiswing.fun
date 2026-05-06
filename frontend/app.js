@@ -1,4 +1,4 @@
-﻿const SETTINGS_KEY = "aiswing-image-studio-settings-v4";
+const SETTINGS_KEY = "aiswing-image-studio-settings-v4";
 const TASKS_KEY = "aiswing-image-studio-tasks-v4";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
@@ -17,6 +17,7 @@ const elements = {
   demoButton: document.getElementById("demoButton"),
   toggleKeyButton: document.getElementById("toggleKeyButton"),
   clearAllButton: document.getElementById("clearAllButton"),
+  updateButton: document.getElementById("updateButton"),
   copyPromptButton: document.getElementById("copyPromptButton"),
   copyCurlButton: document.getElementById("copyCurlButton"),
   downloadButton: document.getElementById("downloadButton"),
@@ -81,6 +82,7 @@ function bindEvents() {
   elements.demoButton.addEventListener("click", fillDemo);
   elements.toggleKeyButton.addEventListener("click", toggleApiKey);
   elements.clearAllButton.addEventListener("click", clearTasks);
+  elements.updateButton.addEventListener("click", updateFromGit);
   elements.copyPromptButton.addEventListener("click", copyPrompt);
   elements.copyCurlButton.addEventListener("click", copyCurl);
   elements.downloadButton.addEventListener("click", downloadCurrentImage);
@@ -467,6 +469,56 @@ async function clearTasks() {
   renderTasks();
   elements.resultStage.innerHTML = `<div class="empty-state"><span></span><h3>还没有图片</h3><p>生成完成后，图片会显示在这里并自动加入右侧任务列表。</p></div>`;
   setStatus("本地任务列表已清空。", "success");
+}
+
+async function updateFromGit() {
+  const token = prompt("请输入后台更新密钥 UPDATE_TOKEN：");
+  if (!token) return;
+  if (!confirm("确认从 GitHub 拉取最新代码并重启服务吗？data 目录不会删除。")) return;
+  elements.updateButton.disabled = true;
+  setStatus("正在提交更新请求，请稍候...", "loading");
+  try {
+    const response = await fetch(`${getDefaultBaseUrl()}/api/update`, {
+      method: "POST",
+      headers: { "X-Update-Token": token },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error?.message || `HTTP ${response.status}`);
+    setStatus("更新已开始。服务会自动拉取 GitHub 最新代码并重启，稍后刷新页面。", "success");
+    pollUpdateStatus(token);
+  } catch (error) {
+    setStatus(`更新失败：${error.message}`, "error");
+    elements.updateButton.disabled = false;
+  }
+}
+
+async function pollUpdateStatus(token) {
+  for (let i = 0; i < 60; i += 1) {
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    try {
+      const response = await fetch(`${getDefaultBaseUrl()}/api/update`, {
+        headers: { "X-Update-Token": token },
+        cache: "no-store",
+      });
+      const data = await response.json();
+      if (data.update?.running) {
+        setStatus("更新执行中，请等待服务重启...", "loading");
+        continue;
+      }
+      if (data.update?.exit_code === 0) {
+        setStatus("更新完成，正在刷新页面...", "success");
+        setTimeout(() => window.location.reload(), 1500);
+        return;
+      }
+      if (data.update?.exit_code) {
+        throw new Error(data.update?.error || "Update command failed");
+      }
+    } catch {
+      setStatus("服务正在重启，稍后自动刷新...", "loading");
+    }
+  }
+  elements.updateButton.disabled = false;
+  setStatus("更新请求已发送。如页面未自动刷新，请稍后手动刷新。", "success");
 }
 
 function formatTime(timestamp) {

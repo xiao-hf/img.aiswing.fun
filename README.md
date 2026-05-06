@@ -1,54 +1,89 @@
-﻿# Aiswing Image Studio
+# Aiswing Image Studio
 
-可 Docker Compose 一键部署的图片生成工作台。浏览器只访问本站同源接口，Node 后端使用 SQLite 任务队列异步请求 `cdn.aiswing.fun`，生成结果保存到磁盘并在 48 小时后自动清理。
+A Docker Compose deployable image-generation workspace. The browser only calls same-origin APIs. The Node backend uses a SQLite task queue, calls `cdn.aiswing.fun` asynchronously, saves generated images on disk, and cleans completed tasks after 48 hours.
 
-## 功能
+## Features
 
-- 支持 `gpt-image-2` 文生图
-- 支持 4K：`3840x2160`、`2160x3840`
-- 支持 `2880x2880` 超清方图
-- 前端调用 `/api/tasks` 创建后台任务
-- SQLite 存任务状态，磁盘存图片文件
-- 任务完成或失败后清除加密 API Key
-- 默认上游：`https://cdn.aiswing.fun`
+- Text-to-image with `gpt-image-2`
+- 4K sizes: `3840x2160`, `2160x3840`
+- Ultra square size: `2880x2880`
+- Frontend creates backend tasks through `/api/tasks`
+- SQLite stores task metadata; image files are stored on disk
+- API keys are encrypted while queued and removed after task completion/failure
+- Frontend static files are under `frontend/`
+- Optional one-click web update, similar to sub2api
+- Default upstream: `https://cdn.aiswing.fun`
 
-## 一条命令部署
+## Project layout
+
+```text
+frontend/      Static frontend pages, JS, CSS, API docs
+server.js      Node backend, SQLite task queue, upstream proxy
+data/          Runtime SQLite database and images; created automatically; not committed
+deploy/        Nginx, systemd and deployment scripts
+delivery/      Packaged delivery artifacts; not committed
+```
+
+## Deploy with Docker Compose
 
 ```bash
-git clone https://github.com/YOUR_NAME/aiswing-image-studio.git
-cd aiswing-image-studio
+git clone https://github.com/xiao-hf/img.aiswing.fun.git
+cd img.aiswing.fun
 cp .env.example .env
-# 务必修改 .env 里的 KEY_ENCRYPTION_SECRET
+# Change KEY_ENCRYPTION_SECRET. Set UPDATE_TOKEN only if you need web one-click update.
 docker compose up -d --build
 ```
 
-访问：
+Open:
 
 ```text
-http://服务器IP:3000
+http://SERVER_IP:3000
 ```
 
-健康检查：
+Health check:
 
 ```bash
 curl http://127.0.0.1:3000/health
 ```
 
-应该看到类似：
+Expected example:
 
 ```json
-{"ok":true,"upstream":"https://cdn.aiswing.fun","build":"2026050607","mode":"sqlite-async-tasks"}
+{"ok":true,"upstream":"https://cdn.aiswing.fun","build":"2026050608","mode":"sqlite-async-tasks"}
 ```
 
-## 宝塔 / Nginx 反代
+## Configuration
 
-把站点反代到：
+Important `.env` values:
+
+```env
+HOST_PORT=3000
+UPSTREAM=https://cdn.aiswing.fun
+DATA_DIR=/app/data
+SQLITE_PATH=/app/data/aiswing.sqlite
+TASK_TTL_HOURS=48
+KEY_ENCRYPTION_SECRET=change-this-secret-before-production
+WORKER_CONCURRENCY=1
+UPDATE_TOKEN=change-this-to-a-long-random-token-or-leave-empty
+UPDATE_RESTART=true
+UPDATE_TIMEOUT_MS=600000
+```
+
+If your upstream gateway runs on the Docker host:
+
+```env
+UPSTREAM=http://host.docker.internal:8080
+```
+
+## Nginx reverse proxy
+
+Proxy the site to:
 
 ```text
 http://127.0.0.1:3000
 ```
 
-推荐：
+Recommended Nginx config:
 
 ```nginx
 location / {
@@ -65,34 +100,28 @@ location / {
 }
 ```
 
-## 配置
+## One-click web update
 
-`.env` 关键项：
-
-```env
-HOST_PORT=3000
-UPSTREAM=https://cdn.aiswing.fun
-DATA_DIR=/app/data
-SQLITE_PATH=/app/data/aiswing.sqlite
-TASK_TTL_HOURS=48
-KEY_ENCRYPTION_SECRET=change-this-secret-before-production
-WORKER_CONCURRENCY=1
-```
-
-如果要让后端请求宿主机 8080 网关：
+The web page has an `Update` button. Enable it by setting a strong random token in `.env`:
 
 ```env
-UPSTREAM=http://host.docker.internal:8080
+UPDATE_TOKEN=change-this-to-a-long-random-token
 ```
 
-Linux Docker 下如访问宿主机不通，可在 `compose.yaml` 服务里加：
+When clicked, the backend checks the token, pulls the latest code from GitHub, validates `server.js`, and restarts the Node process. In Docker, `restart: unless-stopped` starts the container again.
+
+The default update command copies fresh code into `/app`, but it does **not** delete the data directory.
+
+Data survives updates because Compose mounts runtime data from the host:
 
 ```yaml
-extra_hosts:
-  - "host.docker.internal:host-gateway"
+volumes:
+  - ./data:/app/data
 ```
 
-## 数据存储
+Therefore `git pull`, web update, and `docker compose up -d --build` will not clear SQLite or generated images. Do not manually delete the host-side `./data` directory.
+
+## Data storage
 
 ```text
 data/
@@ -101,35 +130,29 @@ data/
     task_xxx.png
 ```
 
-SQLite 只存任务元数据；图片文件存在 `data/images/`。
+SQLite stores task metadata. Images are stored in `data/images/`.
 
 ## API
 
-创建任务：
+Create a task:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks \
-  -H 'Authorization: Bearer sk-your-key' \
-  -H 'Content-Type: application/json' \
-  --data '{"model":"gpt-image-2","prompt":"a red apple","size":"1024x1024","response_format":"b64_json","output_format":"png"}'
+curl http://127.0.0.1:3000/api/tasks   -H 'Authorization: Bearer sk-your-key'   -H 'Content-Type: application/json'   --data '{"model":"gpt-image-2","prompt":"a red apple","size":"1024x1024","response_format":"b64_json","output_format":"png"}'
 ```
 
-查询任务：
+Query a task:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks/TASK_ID \
-  -H 'Authorization: Bearer sk-your-key'
+curl http://127.0.0.1:3000/api/tasks/TASK_ID   -H 'Authorization: Bearer sk-your-key'
 ```
 
-下载图片：
+Download an image:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks/TASK_ID/image \
-  -H 'Authorization: Bearer sk-your-key' \
-  -o result.png
+curl http://127.0.0.1:3000/api/tasks/TASK_ID/image   -H 'Authorization: Bearer sk-your-key'   -o result.png
 ```
 
-## 常用命令
+## Common commands
 
 ```bash
 docker compose up -d --build

@@ -3,6 +3,7 @@ const http = require("http");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
+const { exec } = require("child_process");
 const { URL } = require("url");
 const Database = require("better-sqlite3");
 
@@ -12,7 +13,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050607";
+const build = "2026050608";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -20,6 +21,18 @@ const taskTtlHours = Number(process.env.TASK_TTL_HOURS || 48);
 const cleanupIntervalMs = Number(process.env.CLEANUP_INTERVAL_MINUTES || 10) * 60 * 1000;
 const keySecret = process.env.KEY_ENCRYPTION_SECRET || "change-this-secret-before-production";
 const workerConcurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 1));
+const updateToken = process.env.UPDATE_TOKEN || "";
+const updateCommand = process.env.UPDATE_COMMAND || "rm -rf /tmp/aiswing-image-studio-update && git clone --depth 1 https://github.com/xiao-hf/img.aiswing.fun.git /tmp/aiswing-image-studio-update && cp -a /tmp/aiswing-image-studio-update/. /app/ && npm install --omit=dev && node --check server.js";
+const updateTimeoutMs = Number(process.env.UPDATE_TIMEOUT_MS || 10 * 60 * 1000);
+const updateRestart = String(process.env.UPDATE_RESTART || "true").toLowerCase() !== "false";
+let updateState = {
+  running: false,
+  started_at: null,
+  finished_at: null,
+  exit_code: null,
+  output: "",
+  error: "",
+};
 
 fs.mkdirSync(imageDir, { recursive: true });
 
@@ -310,6 +323,109 @@ async function readBody(req) {
     chunks.push(chunk);
   }
   return Buffer.concat(chunks);
+}
+
+function requireUpdateToken(req, requestUrl) {
+  if (!updateToken) return { ok: false, status: 503, message: "Online update is disabled. Set UPDATE_TOKEN in .env first." };
+  const headerToken = req.headers["x-update-token"] || "";
+  const bearerToken = requireBearer(req);
+  const queryToken = requestUrl.searchParams.get("token") || "";
+  const provided = String(headerToken || bearerToken || queryToken).trim();
+  if (!provided) return { ok: false, status: 401, message: "Missing update token" };
+  const a = Buffer.from(provided);
+  const b = Buffer.from(updateToken);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return { ok: false, status: 403, message: "Invalid update token" };
+  }
+  return { ok: true };
+}
+
+function publicUpdateState() {
+  return {
+    enabled: Boolean(updateToken),
+    running: updateState.running,
+    started_at: updateState.started_at,
+    finished_at: updateState.finished_at,
+    exit_code: updateState.exit_code,
+    output: updateState.output.slice(-12000),
+    error: updateState.error,
+    command: updateCommand,
+    restart: updateRestart,
+  };
+}
+
+function runUpdateCommand() {
+  if (updateState.running) return false;
+  updateState = {
+    running: true,
+    started_at: Date.now(),
+    finished_at: null,
+    exit_code: null,
+    output: "",
+    error: "",
+  };
+  const child = exec(updateCommand, {
+    cwd: root,
+    timeout: updateTimeoutMs,
+    windowsHide: true,
+    maxBuffer: 1024 * 1024 * 10,
+  }, (error, stdout, stderr) => {
+    updateState.running = false;
+    updateState.finished_at = Date.now();
+    updateState.output = `${stdout || ""}${stderr || ""}`.slice(-12000);
+    if (error) {
+      updateState.exit_code = typeof error.code === "number" ? error.code : 1;
+      updateState.error = error.message || "Update command failed";
+      return;
+    }
+    updateState.exit_code = 0;
+    if (updateRestart) {
+      updateState.output = `${updateState.output}
+Update completed. Restarting process...`.slice(-12000);
+      setTimeout(() => process.exit(0), 1500).unref();
+    }
+  });
+  child.stdout?.on("data", (chunk) => {
+    updateState.output = `${updateState.output}${chunk}`.slice(-12000);
+  });
+  child.stderr?.on("data", (chunk) => {
+    updateState.output = `${updateState.output}${chunk}`.slice(-12000);
+  });
+  return true;
+}
+
+async function handleUpdateApi(req, res, requestUrl) {
+  if (req.method === "OPTIONS") {
+    send(res, 204, "", {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Authorization, Content-Type, X-Update-Token",
+    });
+    return;
+  }
+
+  const auth = requireUpdateToken(req, requestUrl);
+  if (!auth.ok) {
+    sendJson(res, auth.status, { error: { message: auth.message }, update: publicUpdateState() });
+    return;
+  }
+
+  if (req.method === "GET") {
+    sendJson(res, 200, { update: publicUpdateState() });
+    return;
+  }
+
+  if (req.method === "POST") {
+    if (updateState.running) {
+      sendJson(res, 409, { error: { message: "Update is already running" }, update: publicUpdateState() });
+      return;
+    }
+    runUpdateCommand();
+    sendJson(res, 202, { ok: true, update: publicUpdateState() });
+    return;
+  }
+
+  sendJson(res, 405, { error: { message: "Method Not Allowed" } });
 }
 
 function normalizeSize(size) {
@@ -931,7 +1047,15 @@ const server = http.createServer((req, res) => {
       build,
       mode: "sqlite-async-tasks",
       data_dir: dataDir,
+      update_enabled: Boolean(updateToken),
       task_ttl_hours: taskTtlHours,
+    });
+    return;
+  }
+
+  if (requestUrl.pathname === "/api/update") {
+    handleUpdateApi(req, res, requestUrl).catch((error) => {
+      sendJson(res, 500, { error: { message: error.message } });
     });
     return;
   }

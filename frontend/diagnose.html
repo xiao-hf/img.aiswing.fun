@@ -44,7 +44,7 @@
 
       try {
         const { response, text } = await getText(`${base}/version.txt?_=${now()}`);
-        add("version.txt 覆盖检查", response.ok && text.includes("build 2026050603"), `HTTP ${response.status}\n${text.slice(0, 500)}`);
+        add("version.txt 覆盖检查", response.ok && text.includes("build 2026050608"), `HTTP ${response.status}\n${text.slice(0, 500)}`);
       } catch (error) {
         add("version.txt 覆盖检查", false, error.message);
       }
