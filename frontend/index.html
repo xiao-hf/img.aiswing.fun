@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aiswing Image Studio</title>
-    <link rel="stylesheet" href="./styles.css?v=2026050715" />
+    <link rel="stylesheet" href="./styles.css?v=2026050932" />
       <style>
       /* critical-fullscreen-layout */
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -14,10 +14,16 @@
   <body>
     <div class="app-shell">
       <aside class="sidebar" aria-label="任务历史">
-        <div class="sidebar-actions">
-          <button id="newTaskButton" class="primary small" type="button">新建</button>
-          <button id="refreshTasksButton" class="secondary small" type="button">刷新</button>
-          <button id="clearLocalButton" class="secondary small" type="button">清空</button>
+        <div class="sidebar-header">
+          <div class="sidebar-actions">
+            <button id="newTaskButton" class="primary small" type="button">新建</button>
+            <button id="refreshTasksButton" class="secondary small" type="button">刷新</button>
+            <button id="clearLocalButton" class="secondary small" type="button">清空</button>
+          </div>
+          <a class="secondary small doc-button" href="./docs.html" target="_blank" rel="noopener">API 文档</a>
+        </div>
+        <div class="sidebar-key-row">
+          <button id="apiKeyButton" class="secondary small api-key-sidebar-button" type="button">&#22635;&#20889; API Key</button>
         </div>
         <div class="sidebar-meta">
           <span><strong id="taskCount">0</strong> 个任务</span>
@@ -27,6 +33,24 @@
       </aside>
 
       <main class="main-pane">
+        <div class="main-header">
+          <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换主题" title="切换深色/浅色模式">
+            <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="5"/>
+              <line x1="12" y1="1" x2="12" y2="3"/>
+              <line x1="12" y1="21" x2="12" y2="23"/>
+              <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+              <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+              <line x1="1" y1="12" x2="3" y2="12"/>
+              <line x1="21" y1="12" x2="23" y2="12"/>
+              <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+              <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg class="moon-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+          </button>
+        </div>
 
         <section id="resultViewport" class="result-viewport" aria-live="polite">
           <div class="empty-hero">
@@ -90,29 +114,30 @@
                   </select>
                 </label>
               </div>
-              <button id="generateButton" class="send-button" type="button" aria-label="生成图片">↑</button>
+              <div class="composer-actions">
+                <button id="copyComposerCurlButton" class="secondary small copy-curl-inline" type="button">&#22797;&#21046; curl</button>
+                <button id="generateButton" class="send-button" type="button" aria-label="生成图片">↑</button>
+              </div>
             </div>
           </div>
-
-          <details id="advancedSettings" class="advanced">
-            <summary><span>API Key 与快捷操作</span><span id="advancedSummaryHint" class="summary-hint"></span></summary>
-            <div class="advanced-grid">
-              <label class="field secret-field">
-                <span>API Key</span>
-                <div class="secret-row">
-                  <input id="apiKeyInput" type="password" placeholder="sk-..." autocomplete="off" />
-                  <button id="toggleKeyButton" class="secondary small" type="button">显示</button>
-                </div>
-              </label>
-              <input id="baseUrlInput" type="hidden" value="" />
-              <button id="demoButton" class="secondary" type="button">填入示例</button>
-              <button id="copyCurlButton" class="secondary" type="button">复制 API 请求</button>
-            </div>
-          </details>
-
-          <div id="statusBox" class="status idle">准备就绪</div>
+          <input id="apiKeyInput" type="password" autocomplete="off" hidden />
+          <input id="baseUrlInput" type="hidden" value="" />
+          <div id="statusBox" class="status hidden-status" hidden>&#20934;&#22791;&#23601;&#32490;</div>
         </section>
       </main>
+    </div>
+
+    <div id="apiKeyModal" class="modal-backdrop" hidden>
+      <div class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="apiKeyModalTitle">
+        <button id="apiKeyCloseButton" class="modal-close" type="button" aria-label="&#20851;&#38381;">&times;</button>
+        <h2 id="apiKeyModalTitle">&#22635;&#20889; API Key</h2>
+        <input id="apiKeyModalInput" class="modal-input" type="password" placeholder="sk-..." autocomplete="off" />
+        <div class="modal-actions">
+          <button id="apiKeyClearButton" class="secondary small" type="button">&#28165;&#31354;</button>
+          <button id="apiKeyCancelButton" class="secondary small" type="button">&#21462;&#28040;</button>
+          <button id="apiKeySaveButton" class="primary small" type="button">&#20445;&#23384;</button>
+        </div>
+      </div>
     </div>
 
     <template id="taskTemplate">
@@ -126,6 +151,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=2026050715"></script>
+    <script src="./app.js?v=2026050932"></script>
   </body>
 </html>

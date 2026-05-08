@@ -1,12 +1,20 @@
 const SETTINGS_KEY = "aiswing-image-studio-settings-v5";
 const API_KEY_CACHE_KEY = "aiswing-image-studio-api-key";
 const TASKS_CACHE_PREFIX = "aiswing-image-studio-cache-v1";
+const THEME_KEY = "aiswing-image-studio-theme";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
 
 const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
+  apiKeyButton: document.getElementById("apiKeyButton"),
+  apiKeyModal: document.getElementById("apiKeyModal"),
+  apiKeyModalInput: document.getElementById("apiKeyModalInput"),
+  apiKeySaveButton: document.getElementById("apiKeySaveButton"),
+  apiKeyCancelButton: document.getElementById("apiKeyCancelButton"),
+  apiKeyClearButton: document.getElementById("apiKeyClearButton"),
+  apiKeyCloseButton: document.getElementById("apiKeyCloseButton"),
   advancedSettings: document.getElementById("advancedSettings"),
   advancedSummaryHint: document.getElementById("advancedSummaryHint"),
   baseUrlInput: document.getElementById("baseUrlInput"),
@@ -24,6 +32,7 @@ const elements = {
   demoButton: document.getElementById("demoButton"),
   toggleKeyButton: document.getElementById("toggleKeyButton"),
   copyCurlButton: document.getElementById("copyCurlButton"),
+  copyComposerCurlButton: document.getElementById("copyComposerCurlButton"),
   updateButton: document.getElementById("updateButton"),
   newTaskButton: document.getElementById("newTaskButton"),
   refreshTasksButton: document.getElementById("refreshTasksButton"),
@@ -34,6 +43,7 @@ const elements = {
   runningCount: document.getElementById("runningCount"),
   resultViewport: document.getElementById("resultViewport"),
   taskTemplate: document.getElementById("taskTemplate"),
+  themeToggle: document.getElementById("themeToggle"),
 };
 
 const state = {
@@ -61,6 +71,7 @@ const defaultSettings = {
 init();
 
 function init() {
+  initTheme();
   hydrateSettings();
   hydrateLocalTasks();
   if (state.tasks.length > 0) {
@@ -74,20 +85,31 @@ function init() {
   startPolling();
 }
 
+function initTheme() {
+  const savedTheme = localStorage.getItem(THEME_KEY) || "light";
+  document.documentElement.setAttribute("data-theme", savedTheme);
+}
+
+function toggleTheme() {
+  const currentTheme = document.documentElement.getAttribute("data-theme") || "light";
+  const newTheme = currentTheme === "light" ? "dark" : "light";
+  document.documentElement.setAttribute("data-theme", newTheme);
+  localStorage.setItem(THEME_KEY, newTheme);
+}
+
 function bindEvents() {
   elements.apiKeyInput.addEventListener("input", () => {
     persistSettings();
     syncAdvancedPanel(false);
   });
-  elements.apiKeyInput.addEventListener("change", () => {
-    persistSettings();
-    syncAdvancedPanel(true);
-    hydrateLocalTasks();
-    state.selectedTaskId = state.tasks[0]?.id || null;
-    renderTaskList();
-    refreshTaskCounters();
-    renderSelectedTask();
-    void refreshFromServer({ silent: true });
+  elements.apiKeyInput.addEventListener("change", handleApiKeyChanged);
+  elements.apiKeyButton?.addEventListener("click", openApiKeyModal);
+  elements.apiKeySaveButton?.addEventListener("click", saveApiKeyFromModal);
+  elements.apiKeyCloseButton?.addEventListener("click", closeApiKeyModal);
+  elements.apiKeyClearButton?.addEventListener("click", clearApiKeyFromModal);
+  elements.apiKeyModalInput?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") saveApiKeyFromModal();
+    if (event.key === "Escape") closeApiKeyModal();
   });
 
   [elements.modelSelect, elements.sizeSelect, elements.qualitySelect, elements.formatSelect, elements.promptInput].forEach((element) => {
@@ -98,13 +120,15 @@ function bindEvents() {
   elements.referenceInput.addEventListener("change", handleReferenceSelection);
   bindReferenceDropEvents();
   elements.generateButton.addEventListener("click", handleGenerate);
-  elements.demoButton.addEventListener("click", fillDemo);
-  elements.toggleKeyButton.addEventListener("click", toggleApiKeyVisibility);
-  elements.copyCurlButton.addEventListener("click", copyCurl);
+  elements.demoButton?.addEventListener("click", fillDemo);
+  elements.toggleKeyButton?.addEventListener("click", toggleApiKeyVisibility);
+  elements.copyCurlButton?.addEventListener("click", copyCurl);
+  elements.copyComposerCurlButton?.addEventListener("click", copyCurl);
   elements.updateButton?.addEventListener("click", updateFromGit);
   elements.newTaskButton.addEventListener("click", createDraft);
   elements.refreshTasksButton.addEventListener("click", refreshFromServer);
   elements.clearLocalButton.addEventListener("click", clearLocalTasks);
+  elements.themeToggle?.addEventListener("click", toggleTheme);
 }
 
 function hydrateSettings() {
@@ -117,7 +141,7 @@ function hydrateSettings() {
   elements.qualitySelect.value = settings.quality || "";
   elements.formatSelect.value = settings.format || defaultSettings.format;
   elements.promptInput.value = settings.prompt || "";
-  syncAdvancedPanel(Boolean(settings.apiKey));
+  syncAdvancedPanel(Boolean(cachedApiKey));
 }
 
 function persistSettings() {
@@ -130,19 +154,56 @@ function persistSettings() {
   }
 }
 
-function syncAdvancedPanel(collapseIfReady = false) {
+function syncAdvancedPanel() {
+  updateApiKeyButton();
+}
+
+function updateApiKeyButton() {
+  if (!elements.apiKeyButton) return;
   const hasKey = Boolean(elements.apiKeyInput.value.trim());
-  if (elements.advancedSummaryHint) {
-    elements.advancedSummaryHint.textContent = hasKey ? "已保存，点击修改" : "未填写";
-  }
-  if (!elements.advancedSettings) return;
-  if (!hasKey) {
-    elements.advancedSettings.open = true;
-    return;
-  }
-  if (collapseIfReady) {
-    elements.advancedSettings.open = false;
-  }
+  elements.apiKeyButton.textContent = hasKey ? "API Key OK" : "\u586B\u5199 API Key";
+  elements.apiKeyButton.dataset.ready = hasKey ? "true" : "false";
+}
+
+function handleApiKeyChanged() {
+  persistSettings();
+  syncAdvancedPanel(true);
+  hydrateLocalTasks();
+  state.selectedTaskId = state.tasks[0]?.id || null;
+  renderTaskList();
+  refreshTaskCounters();
+  renderSelectedTask();
+  void refreshFromServer({ silent: true });
+}
+
+function openApiKeyModal() {
+  if (!elements.apiKeyModal || !elements.apiKeyModalInput) return;
+  elements.apiKeyModalInput.value = elements.apiKeyInput.value.trim();
+  elements.apiKeyModal.hidden = false;
+  requestAnimationFrame(() => {
+    elements.apiKeyModalInput.focus();
+    elements.apiKeyModalInput.select();
+  });
+}
+
+function closeApiKeyModal() {
+  if (elements.apiKeyModal) elements.apiKeyModal.hidden = true;
+}
+
+function saveApiKeyFromModal() {
+  if (!elements.apiKeyModalInput) return;
+  elements.apiKeyInput.value = elements.apiKeyModalInput.value.trim();
+  closeApiKeyModal();
+  handleApiKeyChanged();
+  setStatus(elements.apiKeyInput.value.trim() ? "API Key\u5DF2\u4FDD\u5B58" : "API Key\u5DF2\u6E05\u7A7A", "success");
+}
+
+function clearApiKeyFromModal() {
+  if (elements.apiKeyModalInput) elements.apiKeyModalInput.value = "";
+  elements.apiKeyInput.value = "";
+  closeApiKeyModal();
+  handleApiKeyChanged();
+  setStatus("API Key\u5DF2\u6E05\u7A7A", "success");
 }
 
 function collapseAdvancedIfKeyReady() {
@@ -207,6 +268,7 @@ function authHeaders(json = false) {
 }
 
 function setStatus(message, type = "idle") {
+  if (!elements.statusBox) return;
   elements.statusBox.textContent = message;
   elements.statusBox.dataset.state = type;
 }
@@ -353,6 +415,7 @@ async function handleGenerate() {
   const settings = getSettings();
   if (!settings.apiKey) {
     setStatus("请先填写 API Key", "error");
+    openApiKeyModal();
     return;
   }
   if (!settings.prompt) {
@@ -522,10 +585,9 @@ function renderSelectedTask() {
     <div>
       <div class="result-badge">${task.reference_count > 0 ? "参考图编辑" : "文本生图"}</div>
       <h2>${escapeHtml(task.prompt || "未命名任务")}</h2>
-      <p>${escapeHtml(task.model)} ? ${escapeHtml(task.size)} ? ${statusLabel(task.status, task.progress)}</p>
+      <p>${escapeHtml(task.model)} · ${escapeHtml(task.size)} · ${statusLabel(task.status, task.progress)}</p>
     </div>
     <div class="result-head-actions">
-      <a class="secondary small doc-button" href="./docs.html" target="_blank" rel="noopener">API 文档</a>
       <button id="copyPromptButton" class="secondary small" type="button">复制提示词</button>
     </div>
   `;
@@ -625,7 +687,10 @@ async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
 async function refreshFromServer(options = {}) {
   const settings = getSettings();
   if (!settings.apiKey) {
-    if (!options.silent) setStatus("请先填写 API Key", "error");
+    if (!options.silent) {
+      setStatus("\u8BF7\u5148\u586B\u5199 API Key", "error");
+      openApiKeyModal();
+    }
     return;
   }
   try {
@@ -700,6 +765,7 @@ async function removeTask(taskId) {
   const settings = getSettings();
   if (!settings.apiKey) {
     setStatus("请先填写 API Key", "error");
+    openApiKeyModal();
     return;
   }
   try {
@@ -755,12 +821,13 @@ function toggleApiKeyVisibility() {
 async function copyCurl() {
   const settings = getSettings();
   const payload = await createTaskPayload();
-  const command = `curl --location '${buildApiUrl("/api/tasks")}' \
+  const safePayload = JSON.stringify(payload, null, 2);
+  const command = `curl --location '${window.location.origin}/api/tasks' \
   --header 'Authorization: Bearer ${settings.apiKey || "sk-your-key"}' \
   --header 'Content-Type: application/json' \
-  --data '${JSON.stringify(payload, null, 2)}'`;
+  --data '${safePayload}'`;
   await navigator.clipboard.writeText(command);
-  setStatus("API 请求已复制", "success");
+  setStatus("curl\u5DF2\u590D\u5236", "success");
 }
 
 function downloadCurrentImage() {
