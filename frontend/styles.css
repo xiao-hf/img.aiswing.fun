@@ -239,7 +239,7 @@ h1 { margin-bottom: 0; font-size: clamp(24px, 2vw, 36px); font-weight: 600; lett
   flex: 1 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
   min-height: 0;
   padding: 0;
   overflow: hidden;
@@ -684,7 +684,7 @@ select, input[type="password"], input[type="text"] {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 0 0 12px;
+  padding: 0 0 8px;
 }
 
 .result-head-actions {
