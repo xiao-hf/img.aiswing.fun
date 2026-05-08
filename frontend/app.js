@@ -33,6 +33,7 @@ const elements = {
   toggleKeyButton: document.getElementById("toggleKeyButton"),
   copyCurlButton: document.getElementById("copyCurlButton"),
   copyComposerCurlButton: document.getElementById("copyComposerCurlButton"),
+  copyPromptButton: document.getElementById("copyPromptButton"),
   updateButton: document.getElementById("updateButton"),
   newTaskButton: document.getElementById("newTaskButton"),
   refreshTasksButton: document.getElementById("refreshTasksButton"),
@@ -128,11 +129,18 @@ function updateLangTexts() {
       quality: "质量",
       format: "格式",
       copyCurl: "复制 curl",
+      copyPrompt: "复制提示词",
       emptyTitle: "Turn ideas into images",
       emptyDesc: "输入提示词即可创建后台任务；任务按 API Key 隔离，完成后保留 48 小时。",
       promptPlaceholder: "输入你想生成的画面，也可以拖入/粘贴参考图",
       taskCount: "个任务",
       processing: "处理中",
+      completed: "完成",
+      failed: "失败",
+      pending: "等待中",
+      delete: "删除",
+      download: "下载图片",
+      viewOriginal: "查看原图",
     },
     en: {
       newTask: "New",
@@ -147,11 +155,18 @@ function updateLangTexts() {
       quality: "Quality",
       format: "Format",
       copyCurl: "Copy curl",
+      copyPrompt: "Copy Prompt",
       emptyTitle: "Turn ideas into images",
       emptyDesc: "Enter a prompt to create a backend task; tasks are isolated by API Key and retained for 48 hours.",
       promptPlaceholder: "Describe the image you want to generate, or drag/paste reference images",
       taskCount: "tasks",
       processing: "processing",
+      completed: "completed",
+      failed: "failed",
+      pending: "pending",
+      delete: "Delete",
+      download: "Download",
+      viewOriginal: "View Original",
     }
   };
 
@@ -160,10 +175,19 @@ function updateLangTexts() {
   elements.newTaskButton.textContent = t.newTask;
   elements.refreshTasksButton.textContent = t.refresh;
   elements.clearLocalButton.textContent = t.clear;
-  document.querySelector('.doc-button').textContent = t.apiDoc;
+
+  const docButton = document.querySelector('.doc-button');
+  if (docButton) {
+    docButton.textContent = t.apiDoc;
+    docButton.href = lang === "en" ? "./docs.html?lang=en" : "./docs.html";
+  }
 
   const hasKey = Boolean(elements.apiKeyInput.value.trim());
   elements.apiKeyButton.textContent = hasKey ? t.apiKeyOk : t.fillApiKey;
+
+  if (elements.copyPromptButton) {
+    elements.copyPromptButton.textContent = t.copyPrompt;
+  }
 
   elements.referenceButtonText.textContent = t.uploadRef;
   elements.copyComposerCurlButton.textContent = t.copyCurl;
@@ -173,6 +197,10 @@ function updateLangTexts() {
   const emptyDesc = document.querySelector('.empty-hero p');
   if (emptyHero) emptyHero.textContent = t.emptyTitle;
   if (emptyDesc) emptyDesc.textContent = t.emptyDesc;
+
+  // 更新任务列表中的文本
+  renderTaskList();
+  refreshTaskCounters();
 }
 
 function bindEvents() {
@@ -208,6 +236,21 @@ function bindEvents() {
   elements.clearLocalButton.addEventListener("click", clearLocalTasks);
   elements.themeToggle?.addEventListener("click", toggleTheme);
   elements.langToggle?.addEventListener("click", toggleLang);
+  elements.copyPromptButton?.addEventListener("click", copyPrompt);
+}
+
+function copyPrompt() {
+  const prompt = elements.promptInput.value.trim();
+  if (!prompt) {
+    showStatus("No prompt to copy", "error");
+    return;
+  }
+  navigator.clipboard.writeText(prompt).then(() => {
+    const lang = document.documentElement.getAttribute("lang") || "zh";
+    showStatus(lang === "zh" ? "已复制提示词" : "Prompt copied", "success");
+  }).catch(() => {
+    showStatus("Copy failed", "error");
+  });
 }
 
 function hydrateSettings() {
