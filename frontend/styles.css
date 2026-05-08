@@ -144,9 +144,11 @@ button { cursor: pointer; }
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 8px;
   min-height: 40px;
 }
 
+.lang-toggle,
 .theme-toggle {
   width: 40px;
   height: 40px;
@@ -161,9 +163,33 @@ button { cursor: pointer; }
   transition: all 0.15s ease;
 }
 
+.lang-toggle {
+  width: auto;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lang-toggle:hover,
 .theme-toggle:hover {
   background: var(--bg);
   border-color: var(--muted);
+}
+
+.lang-toggle .lang-zh {
+  display: inline;
+}
+
+.lang-toggle .lang-en {
+  display: none;
+}
+
+[lang="en"] .lang-toggle .lang-zh {
+  display: none;
+}
+
+[lang="en"] .lang-toggle .lang-en {
+  display: inline;
 }
 
 .theme-toggle .sun-icon {

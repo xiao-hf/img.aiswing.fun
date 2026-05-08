@@ -2,6 +2,7 @@ const SETTINGS_KEY = "aiswing-image-studio-settings-v5";
 const API_KEY_CACHE_KEY = "aiswing-image-studio-api-key";
 const TASKS_CACHE_PREFIX = "aiswing-image-studio-cache-v1";
 const THEME_KEY = "aiswing-image-studio-theme";
+const LANG_KEY = "aiswing-image-studio-lang";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
@@ -12,7 +13,6 @@ const elements = {
   apiKeyModal: document.getElementById("apiKeyModal"),
   apiKeyModalInput: document.getElementById("apiKeyModalInput"),
   apiKeySaveButton: document.getElementById("apiKeySaveButton"),
-  apiKeyCancelButton: document.getElementById("apiKeyCancelButton"),
   apiKeyClearButton: document.getElementById("apiKeyClearButton"),
   apiKeyCloseButton: document.getElementById("apiKeyCloseButton"),
   advancedSettings: document.getElementById("advancedSettings"),
@@ -44,6 +44,7 @@ const elements = {
   resultViewport: document.getElementById("resultViewport"),
   taskTemplate: document.getElementById("taskTemplate"),
   themeToggle: document.getElementById("themeToggle"),
+  langToggle: document.getElementById("langToggle"),
 };
 
 const state = {
@@ -72,6 +73,7 @@ init();
 
 function init() {
   initTheme();
+  initLang();
   hydrateSettings();
   hydrateLocalTasks();
   if (state.tasks.length > 0) {
@@ -95,6 +97,82 @@ function toggleTheme() {
   const newTheme = currentTheme === "light" ? "dark" : "light";
   document.documentElement.setAttribute("data-theme", newTheme);
   localStorage.setItem(THEME_KEY, newTheme);
+}
+
+function initLang() {
+  const savedLang = localStorage.getItem(LANG_KEY) || "zh";
+  document.documentElement.setAttribute("lang", savedLang);
+}
+
+function toggleLang() {
+  const currentLang = document.documentElement.getAttribute("lang") || "zh";
+  const newLang = currentLang === "zh" ? "en" : "zh";
+  document.documentElement.setAttribute("lang", newLang);
+  localStorage.setItem(LANG_KEY, newLang);
+  updateLangTexts();
+}
+
+function updateLangTexts() {
+  const lang = document.documentElement.getAttribute("lang") || "zh";
+  const texts = {
+    zh: {
+      newTask: "新建",
+      refresh: "刷新",
+      clear: "清空",
+      apiDoc: "API 文档",
+      fillApiKey: "填写 API Key",
+      apiKeyOk: "API Key OK",
+      uploadRef: "上传参考图",
+      model: "模型",
+      size: "尺寸",
+      quality: "质量",
+      format: "格式",
+      copyCurl: "复制 curl",
+      emptyTitle: "Turn ideas into images",
+      emptyDesc: "输入提示词即可创建后台任务；任务按 API Key 隔离，完成后保留 48 小时。",
+      promptPlaceholder: "输入你想生成的画面，也可以拖入/粘贴参考图",
+      taskCount: "个任务",
+      processing: "处理中",
+    },
+    en: {
+      newTask: "New",
+      refresh: "Refresh",
+      clear: "Clear",
+      apiDoc: "API Docs",
+      fillApiKey: "Set API Key",
+      apiKeyOk: "API Key OK",
+      uploadRef: "Upload Reference",
+      model: "Model",
+      size: "Size",
+      quality: "Quality",
+      format: "Format",
+      copyCurl: "Copy curl",
+      emptyTitle: "Turn ideas into images",
+      emptyDesc: "Enter a prompt to create a backend task; tasks are isolated by API Key and retained for 48 hours.",
+      promptPlaceholder: "Describe the image you want to generate, or drag/paste reference images",
+      taskCount: "tasks",
+      processing: "processing",
+    }
+  };
+
+  const t = texts[lang];
+
+  elements.newTaskButton.textContent = t.newTask;
+  elements.refreshTasksButton.textContent = t.refresh;
+  elements.clearLocalButton.textContent = t.clear;
+  document.querySelector('.doc-button').textContent = t.apiDoc;
+
+  const hasKey = Boolean(elements.apiKeyInput.value.trim());
+  elements.apiKeyButton.textContent = hasKey ? t.apiKeyOk : t.fillApiKey;
+
+  elements.referenceButtonText.textContent = t.uploadRef;
+  elements.copyComposerCurlButton.textContent = t.copyCurl;
+  elements.promptInput.placeholder = t.promptPlaceholder;
+
+  const emptyHero = document.querySelector('.empty-hero h2');
+  const emptyDesc = document.querySelector('.empty-hero p');
+  if (emptyHero) emptyHero.textContent = t.emptyTitle;
+  if (emptyDesc) emptyDesc.textContent = t.emptyDesc;
 }
 
 function bindEvents() {
@@ -129,6 +207,7 @@ function bindEvents() {
   elements.refreshTasksButton.addEventListener("click", refreshFromServer);
   elements.clearLocalButton.addEventListener("click", clearLocalTasks);
   elements.themeToggle?.addEventListener("click", toggleTheme);
+  elements.langToggle?.addEventListener("click", toggleLang);
 }
 
 function hydrateSettings() {
@@ -161,7 +240,11 @@ function syncAdvancedPanel() {
 function updateApiKeyButton() {
   if (!elements.apiKeyButton) return;
   const hasKey = Boolean(elements.apiKeyInput.value.trim());
-  elements.apiKeyButton.textContent = hasKey ? "API Key OK" : "\u586B\u5199 API Key";
+  const lang = document.documentElement.getAttribute("lang") || "zh";
+  const text = lang === "zh"
+    ? (hasKey ? "API Key OK" : "\u586B\u5199 API Key")
+    : (hasKey ? "API Key OK" : "Set API Key");
+  elements.apiKeyButton.textContent = text;
   elements.apiKeyButton.dataset.ready = hasKey ? "true" : "false";
 }
 
