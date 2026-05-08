@@ -4,7 +4,7 @@ A Docker Compose deployable image-generation workspace. The browser only calls s
 
 ## Features
 
-- Text-to-image with `gpt-image-2`
+- Text-to-image and reference-image tasks with `gpt-image-2`
 - 4K sizes: `3840x2160`, `2160x3840`
 - Ultra square size: `2880x2880`
 - Frontend creates backend tasks through `/api/tasks`
@@ -37,19 +37,19 @@ docker compose up -d --build
 Open:
 
 ```text
-http://SERVER_IP:3000
+http://SERVER_IP:8000
 ```
 
 Health check:
 
 ```bash
-curl http://127.0.0.1:3000/health
+curl http://127.0.0.1:8000/health
 ```
 
 Expected example:
 
 ```json
-{"ok":true,"upstream":"https://cdn.aiswing.fun","build":"2026050608","mode":"sqlite-async-tasks"}
+{"ok":true,"upstream":"https://cdn.aiswing.fun","build":"2026050705","mode":"sqlite-async-tasks"}
 ```
 
 ## Configuration
@@ -57,7 +57,7 @@ Expected example:
 Important `.env` values:
 
 ```env
-HOST_PORT=3000
+HOST_PORT=8000
 UPSTREAM=https://cdn.aiswing.fun
 DATA_DIR=/app/data
 SQLITE_PATH=/app/data/aiswing.sqlite
@@ -80,14 +80,14 @@ UPSTREAM=http://host.docker.internal:8080
 Proxy the site to:
 
 ```text
-http://127.0.0.1:3000
+http://127.0.0.1:8000
 ```
 
 Recommended Nginx config:
 
 ```nginx
 location / {
-    proxy_pass http://127.0.0.1:3000;
+    proxy_pass http://127.0.0.1:8000;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -134,22 +134,22 @@ SQLite stores task metadata. Images are stored in `data/images/`.
 
 ## API
 
-Create a task:
+Create a text-to-image task:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks   -H 'Authorization: Bearer sk-your-key'   -H 'Content-Type: application/json'   --data '{"model":"gpt-image-2","prompt":"a red apple","size":"1024x1024","response_format":"b64_json","output_format":"png"}'
+curl http://127.0.0.1:8000/api/tasks   -H 'Authorization: Bearer sk-your-key'   -H 'Content-Type: application/json'   --data '{"model":"gpt-image-2","prompt":"a red apple","size":"1024x1024","quality":"high","format":"png","reference_images":[]}'
 ```
 
 Query a task:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks/TASK_ID   -H 'Authorization: Bearer sk-your-key'
+curl http://127.0.0.1:8000/api/tasks/TASK_ID   -H 'Authorization: Bearer sk-your-key'
 ```
 
 Download an image:
 
 ```bash
-curl http://127.0.0.1:3000/api/tasks/TASK_ID/image   -H 'Authorization: Bearer sk-your-key'   -o result.png
+curl http://127.0.0.1:8000/api/tasks/TASK_ID/image   -H 'Authorization: Bearer sk-your-key'   -o result.png
 ```
 
 ## Common commands
@@ -160,3 +160,4 @@ docker compose logs -f
 docker compose restart
 docker compose down
 ```
+

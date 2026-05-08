@@ -1,10 +1,14 @@
-const SETTINGS_KEY = "aiswing-image-studio-settings-v4";
-const TASKS_KEY = "aiswing-image-studio-tasks-v4";
+const SETTINGS_KEY = "aiswing-image-studio-settings-v5";
+const API_KEY_CACHE_KEY = "aiswing-image-studio-api-key";
+const TASKS_CACHE_PREFIX = "aiswing-image-studio-cache-v1";
+const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
 
 const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
+  advancedSettings: document.getElementById("advancedSettings"),
+  advancedSummaryHint: document.getElementById("advancedSummaryHint"),
   baseUrlInput: document.getElementById("baseUrlInput"),
   modelSelect: document.getElementById("modelSelect"),
   sizeSelect: document.getElementById("sizeSelect"),
@@ -13,36 +17,40 @@ const elements = {
   promptInput: document.getElementById("promptInput"),
   referenceInput: document.getElementById("referenceInput"),
   referencePreviewList: document.getElementById("referencePreviewList"),
+  dropHint: document.getElementById("dropHint"),
+  composerBox: document.querySelector(".composer-box"),
+  referenceButtonText: document.getElementById("referenceButtonText"),
   generateButton: document.getElementById("generateButton"),
   demoButton: document.getElementById("demoButton"),
   toggleKeyButton: document.getElementById("toggleKeyButton"),
-  clearAllButton: document.getElementById("clearAllButton"),
-  updateButton: document.getElementById("updateButton"),
-  copyPromptButton: document.getElementById("copyPromptButton"),
   copyCurlButton: document.getElementById("copyCurlButton"),
-  downloadButton: document.getElementById("downloadButton"),
-  currentPrompt: document.getElementById("currentPrompt"),
-  taskModeBadge: document.getElementById("taskModeBadge"),
+  updateButton: document.getElementById("updateButton"),
+  newTaskButton: document.getElementById("newTaskButton"),
+  refreshTasksButton: document.getElementById("refreshTasksButton"),
+  clearLocalButton: document.getElementById("clearLocalButton"),
   statusBox: document.getElementById("statusBox"),
-  resultStage: document.getElementById("resultStage"),
   taskList: document.getElementById("taskList"),
   taskCount: document.getElementById("taskCount"),
-  successCount: document.getElementById("successCount"),
+  runningCount: document.getElementById("runningCount"),
+  resultViewport: document.getElementById("resultViewport"),
   taskTemplate: document.getElementById("taskTemplate"),
 };
 
 const state = {
   references: [],
   tasks: [],
-  activeTaskId: null,
+  selectedTaskId: null,
   currentImageUrl: "",
   currentFileName: "",
-  polling: false,
+  currentObjectUrl: "",
+  imageLoadToken: 0,
+  pollingActive: false,
+  pollingTimerId: null,
 };
 
 const defaultSettings = {
   apiKey: "",
-  baseUrl: getDefaultBaseUrl(),
+  baseUrl: window.location.origin,
   model: "gpt-image-2",
   size: "1024x1024",
   quality: "",
@@ -54,54 +62,91 @@ init();
 
 function init() {
   hydrateSettings();
-  hydrateTasks();
+  hydrateLocalTasks();
+  if (state.tasks.length > 0) {
+    state.selectedTaskId = state.tasks[0].id;
+  }
   bindEvents();
-  renderCurrentPrompt();
   renderReferencePreviews();
-  renderTasks();
-  if (state.tasks[0]) activateTask(state.tasks[0].id);
+  renderTaskList();
+  renderSelectedTask();
+  refreshTaskCounters();
   startPolling();
 }
 
 function bindEvents() {
-  [
-    elements.apiKeyInput,
-    elements.baseUrlInput,
-    elements.modelSelect,
-    elements.sizeSelect,
-    elements.qualitySelect,
-    elements.formatSelect,
-    elements.promptInput,
-  ].forEach((element) => {
-    element.addEventListener("input", () => { persistSettings(); renderCurrentPrompt(); });
-    element.addEventListener("change", () => { persistSettings(); renderCurrentPrompt(); });
+  elements.apiKeyInput.addEventListener("input", () => {
+    persistSettings();
+    syncAdvancedPanel(false);
+  });
+  elements.apiKeyInput.addEventListener("change", () => {
+    persistSettings();
+    syncAdvancedPanel(true);
+    hydrateLocalTasks();
+    state.selectedTaskId = state.tasks[0]?.id || null;
+    renderTaskList();
+    refreshTaskCounters();
+    renderSelectedTask();
+    void refreshFromServer({ silent: true });
+  });
+
+  [elements.modelSelect, elements.sizeSelect, elements.qualitySelect, elements.formatSelect, elements.promptInput].forEach((element) => {
+    element.addEventListener("input", persistSettings);
+    element.addEventListener("change", persistSettings);
   });
 
   elements.referenceInput.addEventListener("change", handleReferenceSelection);
+  bindReferenceDropEvents();
   elements.generateButton.addEventListener("click", handleGenerate);
   elements.demoButton.addEventListener("click", fillDemo);
-  elements.toggleKeyButton.addEventListener("click", toggleApiKey);
-  elements.clearAllButton.addEventListener("click", clearTasks);
-  elements.updateButton.addEventListener("click", updateFromGit);
-  elements.copyPromptButton.addEventListener("click", copyPrompt);
+  elements.toggleKeyButton.addEventListener("click", toggleApiKeyVisibility);
   elements.copyCurlButton.addEventListener("click", copyCurl);
-  elements.downloadButton.addEventListener("click", downloadCurrentImage);
+  elements.updateButton?.addEventListener("click", updateFromGit);
+  elements.newTaskButton.addEventListener("click", createDraft);
+  elements.refreshTasksButton.addEventListener("click", refreshFromServer);
+  elements.clearLocalButton.addEventListener("click", clearLocalTasks);
 }
 
 function hydrateSettings() {
   const settings = { ...defaultSettings, ...safeJson(localStorage.getItem(SETTINGS_KEY), {}) };
-  settings.baseUrl = normalizeCachedBaseUrl(settings.baseUrl);
-  elements.apiKeyInput.value = settings.apiKey;
-  elements.baseUrlInput.value = settings.baseUrl;
-  elements.modelSelect.value = settings.model;
-  elements.sizeSelect.value = settings.size;
-  elements.qualitySelect.value = settings.quality;
-  elements.formatSelect.value = settings.format;
-  elements.promptInput.value = settings.prompt;
+  const cachedApiKey = localStorage.getItem(API_KEY_CACHE_KEY) || settings.apiKey || "";
+  elements.apiKeyInput.value = cachedApiKey;
+  elements.baseUrlInput.value = normalizeBaseUrl(settings.baseUrl || defaultSettings.baseUrl);
+  elements.modelSelect.value = settings.model || defaultSettings.model;
+  elements.sizeSelect.value = settings.size || defaultSettings.size;
+  elements.qualitySelect.value = settings.quality || "";
+  elements.formatSelect.value = settings.format || defaultSettings.format;
+  elements.promptInput.value = settings.prompt || "";
+  syncAdvancedPanel(Boolean(settings.apiKey));
 }
 
 function persistSettings() {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(getSettings()));
+  const settings = getSettings();
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  if (settings.apiKey) {
+    localStorage.setItem(API_KEY_CACHE_KEY, settings.apiKey);
+  } else {
+    localStorage.removeItem(API_KEY_CACHE_KEY);
+  }
+}
+
+function syncAdvancedPanel(collapseIfReady = false) {
+  const hasKey = Boolean(elements.apiKeyInput.value.trim());
+  if (elements.advancedSummaryHint) {
+    elements.advancedSummaryHint.textContent = hasKey ? "已保存，点击修改" : "未填写";
+  }
+  if (!elements.advancedSettings) return;
+  if (!hasKey) {
+    elements.advancedSettings.open = true;
+    return;
+  }
+  if (collapseIfReady) {
+    elements.advancedSettings.open = false;
+  }
+}
+
+function collapseAdvancedIfKeyReady() {
+  syncAdvancedPanel(true);
 }
 
 function getSettings() {
@@ -116,111 +161,223 @@ function getSettings() {
   };
 }
 
-function hydrateTasks() {
-  state.tasks = safeJson(localStorage.getItem(TASKS_KEY), []).filter((task) => task && task.id);
-  persistTasks();
+function hydrateLocalTasks() {
+  state.tasks = safeJson(localStorage.getItem(getTasksCacheKey()), []).filter((task) => task && task.id);
 }
 
-function persistTasks() {
-  localStorage.setItem(TASKS_KEY, JSON.stringify(state.tasks.slice(0, MAX_TASKS)));
+function persistLocalTasks() {
+  localStorage.setItem(getTasksCacheKey(), JSON.stringify(state.tasks.slice(0, MAX_TASKS)));
+}
+
+function getTasksCacheKey() {
+  const apiKey = getSettings().apiKey;
+  return `${TASKS_CACHE_PREFIX}:${apiKey ? fingerprintText(apiKey) : "anonymous"}`;
+}
+
+function fingerprintText(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0).toString(16);
 }
 
 function safeJson(raw, fallback) {
-  try { return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
+  try {
+    return raw ? JSON.parse(raw) : fallback;
+  } catch {
+    return fallback;
+  }
 }
 
 function normalizeBaseUrl(value) {
-  return (value || defaultSettings.baseUrl).trim().replace(/\/+$/, "");
+  return String(value || defaultSettings.baseUrl).trim().replace(/\/+$/, "") || defaultSettings.baseUrl;
 }
 
-function getDefaultBaseUrl() {
-  return window.location.origin;
-}
-
-function normalizeCachedBaseUrl(value) {
-  const normalized = normalizeBaseUrl(value);
-  const isLegacyPhpProxy = normalized.includes("/api.php") && normalized.includes("path=");
-  const legacyHosts = new Set(["https://gpt.aiswing.fun", "https://img.aiswing.fun", "https://cdn.aiswing.fun"]);
-  return legacyHosts.has(normalized) || isLegacyPhpProxy ? window.location.origin : normalized;
-}
-
-function buildApiUrl(settings, pathname) {
+function buildApiUrl(pathname) {
+  const settings = getSettings();
   return `${settings.baseUrl}${pathname}`;
 }
 
-function authHeaders(settings, json = false) {
-  const headers = { Authorization: `Bearer ${settings.apiKey}` };
+function authHeaders(json = false) {
+  const headers = { Authorization: `Bearer ${getSettings().apiKey}` };
   if (json) headers["Content-Type"] = "application/json";
   return headers;
 }
 
-function renderCurrentPrompt() {
-  const prompt = elements.promptInput.value.trim();
-  elements.currentPrompt.textContent = prompt || "等待输入提示词。";
-  elements.taskModeBadge.textContent = state.references.length ? "参考图编辑模式" : "生成模式";
-}
-
-async function handleReferenceSelection(event) {
-  const incomingFiles = Array.from(event.target.files || []);
-  const knownFiles = new Set(state.references.map(getReferenceFileKey));
-  incomingFiles.forEach((file) => {
-    const key = getReferenceFileKey(file);
-    if (!knownFiles.has(key)) {
-      state.references.push(file);
-      knownFiles.add(key);
-    }
-  });
-  elements.referenceInput.value = "";
-  renderReferencePreviews();
-  renderCurrentPrompt();
-}
-
-function getReferenceFileKey(file) {
-  return `${file.name}:${file.size}:${file.lastModified}`;
+function setStatus(message, type = "idle") {
+  elements.statusBox.textContent = message;
+  elements.statusBox.dataset.state = type;
 }
 
 function renderReferencePreviews() {
   elements.referencePreviewList.innerHTML = "";
+  elements.referenceButtonText.textContent = state.references.length > 0 ? `参考图 ${state.references.length}` : "上传参考图";
+
+  if (!state.references.length) {
+    return;
+  }
+
   state.references.forEach((file, index) => {
-    const wrapper = document.createElement("div");
-    wrapper.className = "thumb-item";
-    const image = document.createElement("img");
-    image.src = URL.createObjectURL(file);
-    image.alt = file.name;
-    const removeButton = document.createElement("button");
-    removeButton.type = "button";
-    removeButton.textContent = "×";
-    removeButton.setAttribute("aria-label", `删除参考图 ${file.name}`);
-    removeButton.addEventListener("click", () => removeReference(index));
-    wrapper.appendChild(image);
-    wrapper.appendChild(removeButton);
-    elements.referencePreviewList.appendChild(wrapper);
+    const item = document.createElement("div");
+    item.className = "reference-item";
+    const img = document.createElement("img");
+    img.alt = file.name;
+    img.src = file.previewUrl || URL.createObjectURL(file);
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "reference-remove";
+    remove.textContent = "×";
+    remove.addEventListener("click", () => removeReference(index));
+    item.appendChild(img);
+    item.appendChild(remove);
+    elements.referencePreviewList.appendChild(item);
   });
 }
 
 function removeReference(index) {
+  const file = state.references[index];
+  if (file?.previewUrl) {
+    URL.revokeObjectURL(file.previewUrl);
+  }
   state.references.splice(index, 1);
-  elements.referenceInput.value = "";
   renderReferencePreviews();
-  renderCurrentPrompt();
+}
+
+async function handleReferenceSelection(event) {
+  addReferenceFiles(event.target.files || []);
+  elements.referenceInput.value = "";
+}
+
+function addReferenceFiles(fileList) {
+  const incomingFiles = Array.from(fileList || []).filter((file) => file.type.startsWith("image/"));
+  if (!incomingFiles.length) return 0;
+
+  const known = new Set(state.references.map(getReferenceKey));
+  let added = 0;
+  for (const file of incomingFiles) {
+    const key = getReferenceKey(file);
+    if (known.has(key)) continue;
+    const previewUrl = URL.createObjectURL(file);
+    state.references.push(Object.assign(file, { previewUrl }));
+    known.add(key);
+    added += 1;
+  }
+
+  renderReferencePreviews();
+  persistSettings();
+  if (added > 0) {
+    setStatus(`已添加 ${added} 张参考图`, "success");
+  }
+  return added;
+}
+
+function bindReferenceDropEvents() {
+  const dropTargets = [elements.composerBox, elements.promptInput, elements.referencePreviewList].filter(Boolean);
+  let dragDepth = 0;
+
+  const hasImageFiles = (event) => Array.from(event.dataTransfer?.items || event.dataTransfer?.files || [])
+    .some((item) => item.kind === "file" ? item.type.startsWith("image/") : item.type?.startsWith("image/"));
+
+  const setDragging = (enabled) => {
+    document.body.classList.toggle("dragging-image", enabled);
+    elements.composerBox?.classList.toggle("drag-over", enabled);
+  };
+
+  const preventIfImage = (event) => {
+    if (!hasImageFiles(event)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    event.dataTransfer.dropEffect = "copy";
+    return true;
+  };
+
+  dropTargets.forEach((target) => {
+    target.addEventListener("dragenter", (event) => {
+      if (!preventIfImage(event)) return;
+      dragDepth += 1;
+      setDragging(true);
+    });
+    target.addEventListener("dragover", preventIfImage);
+    target.addEventListener("dragleave", (event) => {
+      if (!hasImageFiles(event)) return;
+      event.preventDefault();
+      dragDepth = Math.max(0, dragDepth - 1);
+      if (dragDepth === 0) setDragging(false);
+    });
+    target.addEventListener("drop", (event) => {
+      if (!preventIfImage(event)) return;
+      dragDepth = 0;
+      setDragging(false);
+      const added = addReferenceFiles(event.dataTransfer.files || []);
+      if (!added) setStatus("未识别到图片文件", "error");
+    });
+  });
+
+  elements.promptInput.addEventListener("paste", (event) => {
+    const files = Array.from(event.clipboardData?.files || []).filter((file) => file.type.startsWith("image/"));
+    if (!files.length) return;
+    event.preventDefault();
+    addReferenceFiles(files);
+  });
+}
+
+function getReferenceKey(file) {
+  return `${file.name}:${file.size}:${file.lastModified}`;
+}
+
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error(`读取参考图失败: ${file.name}`));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function createTaskPayload() {
+  const prompt = elements.promptInput.value.trim();
+  const referenceImages = await Promise.all(state.references.map((file) => readFileAsDataUrl(file)));
+  return {
+    model: elements.modelSelect.value,
+    prompt,
+    size: elements.sizeSelect.value,
+    quality: elements.qualitySelect.value,
+    format: elements.formatSelect.value,
+    reference_images: referenceImages,
+  };
 }
 
 async function handleGenerate() {
   const settings = getSettings();
-  if (!settings.apiKey) return setStatus("请先填写 API Key。", "error");
-  if (!settings.prompt) return setStatus("请先输入提示词。", "error");
-  if (state.references.length) return setStatus("异步任务版当前先支持文生图；参考图编辑下一版接入。", "error");
+  if (!settings.apiKey) {
+    setStatus("请先填写 API Key", "error");
+    return;
+  }
+  if (!settings.prompt) {
+    setStatus("请先输入提示词", "error");
+    return;
+  }
 
   elements.generateButton.disabled = true;
-  setStatus("正在创建后台任务。", "loading");
+  setStatus("正在创建任务", "loading");
 
   try {
-    const task = await createRemoteTask(settings);
+    const payload = await createTaskPayload();
+    const response = await fetch(buildApiUrl("/api/tasks"), {
+      method: "POST",
+      headers: authHeaders(true),
+      body: JSON.stringify(payload),
+    });
+    const data = await parseJsonResponse(response);
+    collapseAdvancedIfKeyReady();
+    const task = normalizeTask(data.task);
     upsertTask(task);
-    activateTask(task.id);
-    setStatus("任务已创建，后台正在生成。页面可保持打开并自动轮询。", "loading");
-    elements.promptInput.value = settings.prompt;
-    persistSettings();
+    state.selectedTaskId = task.id;
+    renderSelectedTask();
+    setStatus(task.reference_count > 0 ? "参考图任务已提交，后端正在处理" : "任务已提交，后端正在处理", "loading");
+    clearComposerAfterSubmit();
     startPolling(true);
   } catch (error) {
     setStatus(error.message, "error");
@@ -229,37 +386,24 @@ async function handleGenerate() {
   }
 }
 
-async function createRemoteTask(settings) {
-  const payload = {
-    model: settings.model,
-    prompt: settings.prompt,
-    size: settings.size,
-    response_format: "b64_json",
-    output_format: settings.format || "png",
-  };
-  if (settings.quality) payload.quality = settings.quality;
-
-  const response = await fetch(buildApiUrl(settings, "/api/tasks"), {
-    method: "POST",
-    headers: authHeaders(settings, true),
-    body: JSON.stringify(payload),
+function clearComposerAfterSubmit() {
+  state.references.forEach((file) => {
+    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
   });
-  const data = await parseResponse(response);
-  return normalizeTask(data.task);
+  state.references = [];
+  elements.referenceInput.value = "";
+  renderReferencePreviews();
+  persistSettings();
 }
 
-async function fetchTask(settings, id) {
-  const response = await fetch(buildApiUrl(settings, `/api/tasks/${encodeURIComponent(id)}`), {
-    headers: authHeaders(settings),
-  });
-  const data = await parseResponse(response);
-  return normalizeTask(data.task);
-}
-
-async function parseResponse(response) {
+async function parseJsonResponse(response) {
   const text = await response.text();
-  let payload;
-  try { payload = JSON.parse(text); } catch { payload = { raw: text }; }
+  let payload = {};
+  try {
+    payload = text ? JSON.parse(text) : {};
+  } catch {
+    payload = { raw: text };
+  }
   if (!response.ok) {
     throw new Error(payload?.error?.message || payload?.message || text || `HTTP ${response.status}`);
   }
@@ -268,187 +412,355 @@ async function parseResponse(response) {
 
 function normalizeTask(task) {
   return {
-    id: task.id,
-    status: task.status,
-    model: task.model,
-    size: task.size,
+    id: String(task.id),
+    model: task.model || "gpt-image-2",
+    prompt: task.prompt || "",
+    size: task.size || "1024x1024",
     quality: task.quality || "",
     format: task.format || "png",
-    prompt: task.prompt,
+    mode: task.mode === "edit" ? "edit" : "generate",
+    reference_count: Number(task.reference_count || 0),
+    status: task.status || "pending",
     progress: task.progress || "",
-    error: task.error_message || task.error || "",
-    imageUrl: task.image_url || "",
-    hasReferences: false,
-    createdAt: task.created_at || Date.now(),
-    updatedAt: task.updated_at || Date.now(),
-    expiresAt: task.expires_at || null,
+    error_message: task.error_message || "",
+    image_url: task.image_url || "",
+    created_at: Number(task.created_at || Date.now()),
+    started_at: task.started_at || null,
+    completed_at: task.completed_at || null,
+    expires_at: task.expires_at || null,
+    updated_at: Number(task.updated_at || Date.now()),
   };
 }
 
 function upsertTask(task) {
-  const nextTasks = state.tasks.filter((item) => item.id !== task.id);
-  state.tasks = [task, ...nextTasks].sort((a, b) => b.createdAt - a.createdAt).slice(0, MAX_TASKS);
-  persistTasks();
-  renderTasks();
+  state.tasks = [task, ...state.tasks.filter((item) => item.id !== task.id)].sort((a, b) => b.created_at - a.created_at).slice(0, MAX_TASKS);
+  persistLocalTasks();
+  renderTaskList();
+  refreshTaskCounters();
 }
 
-function startPolling(force = false) {
-  if (state.polling && !force) return;
-  state.polling = true;
-  pollTasks().finally(() => {
-    setTimeout(startPolling, POLL_INTERVAL_MS);
+function renderTaskList() {
+  elements.taskList.innerHTML = "";
+  if (!state.tasks.length) {
+    const empty = document.createElement("div");
+    empty.className = "task-empty";
+    empty.textContent = "暂无任务";
+    elements.taskList.appendChild(empty);
+    return;
+  }
+
+  for (const task of state.tasks) {
+    const node = elements.taskTemplate.content.firstElementChild.cloneNode(true);
+    const main = node.querySelector(".task-main");
+    const title = node.querySelector(".task-title");
+    const meta = node.querySelector(".task-meta");
+    const status = node.querySelector(".task-status");
+    const del = node.querySelector(".task-delete");
+
+    node.dataset.state = task.status;
+    node.classList.toggle("active", task.id === state.selectedTaskId);
+    title.textContent = truncateText(task.prompt || "未命名任务", 34);
+    meta.textContent = `${task.model} · ${task.size} · ${task.reference_count > 0 ? "参考图" : "文本"}`;
+    status.textContent = statusLabel(task.status, task.progress);
+
+    main.addEventListener("click", () => {
+      state.selectedTaskId = task.id;
+      renderTaskList();
+      renderSelectedTask();
+    });
+
+    del.addEventListener("click", async (event) => {
+      event.stopPropagation();
+      await removeTask(task.id);
+    });
+
+    elements.taskList.appendChild(node);
+  }
+}
+
+function refreshTaskCounters() {
+  elements.taskCount.textContent = String(state.tasks.length);
+  elements.runningCount.textContent = String(state.tasks.filter((task) => task.status === "pending" || task.status === "running").length);
+}
+
+function truncateText(value, max) {
+  const text = String(value || "");
+  return text.length > max ? `${text.slice(0, max)}…` : text;
+}
+
+function statusLabel(status, progress) {
+  if (status === "pending") return progress || "排队中";
+  if (status === "running") return progress || "生成中";
+  if (status === "succeeded") return "已完成";
+  if (status === "failed") return "失败";
+  return status;
+}
+
+function renderSelectedTask() {
+  const task = state.selectedTaskId === DRAFT_TASK_ID
+    ? null
+    : state.tasks.find((item) => item.id === state.selectedTaskId) || state.tasks[0] || null;
+  state.selectedTaskId = task ? task.id : state.selectedTaskId === DRAFT_TASK_ID ? DRAFT_TASK_ID : null;
+  renderTaskList();
+  elements.resultViewport.innerHTML = "";
+  resetCurrentImage();
+  const imageLoadToken = ++state.imageLoadToken;
+
+  if (!task) {
+    elements.resultViewport.innerHTML = `
+      <div class="empty-hero">
+        <h2>Turn ideas into images</h2>
+        <p>输入提示词即可创建后台任务；任务按 API Key 隔离，完成后保留 48 小时。</p>
+      </div>
+    `;
+    return;
+  }
+
+  const header = document.createElement("div");
+  header.className = "result-head";
+  header.innerHTML = `
+    <div>
+      <div class="result-badge">${task.reference_count > 0 ? "参考图编辑" : "文本生图"}</div>
+      <h2>${escapeHtml(task.prompt || "未命名任务")}</h2>
+      <p>${escapeHtml(task.model)} ? ${escapeHtml(task.size)} ? ${statusLabel(task.status, task.progress)}</p>
+    </div>
+    <div class="result-head-actions">
+      <a class="secondary small doc-button" href="./docs.html" target="_blank" rel="noopener">API 文档</a>
+      <button id="copyPromptButton" class="secondary small" type="button">复制提示词</button>
+    </div>
+  `;
+
+  const stage = document.createElement("div");
+  stage.className = `result-stage state-${task.status}`;
+
+  let resultImage = null;
+  if (task.status === "succeeded" && task.image_url) {
+    stage.innerHTML = `<div class="empty-inner"><strong>图片已完成</strong><span>正在加载预览...</span></div>`;
+    resultImage = document.createElement("img");
+    resultImage.alt = task.prompt || "生成结果";
+    setStatus("图片已完成，正在加载预览", "loading");
+  } else if (task.status === "failed") {
+    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(task.error_message || "生成失败")}</div>`;
+    setStatus(task.error_message || "生成失败", "error");
+  } else {
+    stage.innerHTML = `<div class="empty-inner"><strong>${task.status === "pending" ? "排队中" : "生成中"}</strong><span>${escapeHtml(task.progress || "正在处理任务")}</span></div>`;
+    setStatus(task.status === "pending" ? "任务已入队，等待后端处理" : "后端正在生成", "loading");
+  }
+
+  const actions = document.createElement("div");
+  actions.className = "result-actions";
+  actions.innerHTML = `
+    <button id="downloadButton" class="secondary" type="button" disabled>下载当前图</button>
+    <button id="copyCurlTaskButton" class="secondary" type="button">复制请求</button>
+  `;
+
+  elements.resultViewport.appendChild(header);
+  elements.resultViewport.appendChild(stage);
+  elements.resultViewport.appendChild(actions);
+
+  const copyPromptButton = header.querySelector("#copyPromptButton");
+  const downloadButton = actions.querySelector("#downloadButton");
+  const copyCurlTaskButton = actions.querySelector("#copyCurlTaskButton");
+
+  copyPromptButton.addEventListener("click", async () => {
+    await navigator.clipboard.writeText(task.prompt || "");
+    setStatus("提示词已复制", "success");
   });
+
+  downloadButton.addEventListener("click", downloadCurrentImage);
+  copyCurlTaskButton.addEventListener("click", copyCurl);
+
+  if (resultImage) {
+    void loadTaskImageBlob(task, resultImage, stage, downloadButton, imageLoadToken);
+  }
+}
+
+function resetCurrentImage() {
+  if (state.currentObjectUrl) {
+    URL.revokeObjectURL(state.currentObjectUrl);
+  }
+  state.currentObjectUrl = "";
+  state.currentImageUrl = "";
+  state.currentFileName = "";
+}
+
+async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
+  try {
+    const response = await fetch(buildApiUrl(`${task.image_url}?t=${task.updated_at}`), {
+      headers: authHeaders(),
+    });
+    if (!response.ok) {
+      let message = `图片读取失败 HTTP ${response.status}`;
+      try {
+        const payload = await response.clone().json();
+        message = payload?.error?.message || payload?.message || message;
+      } catch {
+        // keep status code message
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
+
+    resetCurrentImage();
+    const objectUrl = URL.createObjectURL(blob);
+    state.currentObjectUrl = objectUrl;
+    state.currentImageUrl = objectUrl;
+    state.currentFileName = `aiswing-${task.id}.${task.format || "png"}`;
+
+    img.src = objectUrl;
+    stage.innerHTML = "";
+    stage.appendChild(img);
+    downloadButton.disabled = false;
+    setStatus("图片已完成，结果保留 48 小时", "success");
+  } catch (error) {
+    if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
+    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(error.message || "图片预览加载失败")}</div>`;
+    downloadButton.disabled = true;
+    setStatus(error.message || "图片预览加载失败", "error");
+  }
+}
+
+async function refreshFromServer(options = {}) {
+  const settings = getSettings();
+  if (!settings.apiKey) {
+    if (!options.silent) setStatus("请先填写 API Key", "error");
+    return;
+  }
+  try {
+    const response = await fetch(buildApiUrl("/api/tasks?limit=30"), {
+      headers: authHeaders(),
+    });
+    const data = await parseJsonResponse(response);
+    if (!Array.isArray(data.tasks)) throw new Error("任务列表格式错误");
+    const normalized = data.tasks.map(normalizeTask);
+    state.tasks = normalized.sort((a, b) => b.created_at - a.created_at).slice(0, MAX_TASKS);
+    persistLocalTasks();
+    if (state.selectedTaskId === DRAFT_TASK_ID) {
+      // 保持新建空白态
+    } else if (!state.selectedTaskId || !state.tasks.some((task) => task.id === state.selectedTaskId)) {
+      state.selectedTaskId = state.tasks[0]?.id || null;
+    }
+    renderTaskList();
+    refreshTaskCounters();
+    renderSelectedTask();
+    if (!options.silent) setStatus("任务列表已刷新", "success");
+  } catch (error) {
+    if (!options.silent) setStatus(error.message, "error");
+  }
 }
 
 async function pollTasks() {
   const settings = getSettings();
   if (!settings.apiKey) return;
-  const activeTasks = state.tasks.filter((task) => ["pending", "running"].includes(task.status));
+  const activeTasks = state.tasks.filter((task) => task.status === "pending" || task.status === "running");
   if (!activeTasks.length) return;
 
   for (const task of activeTasks) {
     try {
-      const fresh = await fetchTask(settings, task.id);
+      const response = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(task.id)}`), {
+        headers: authHeaders(),
+      });
+      const data = await parseJsonResponse(response);
+      const fresh = normalizeTask(data.task);
       upsertTask(fresh);
-      if (fresh.id === state.activeTaskId) {
-        await renderResult(fresh);
-        renderCurrentTaskText(fresh);
+      if (fresh.id === state.selectedTaskId) {
+        renderSelectedTask();
       }
-    } catch (error) {
-      task.error = error.message;
-      task.updatedAt = Date.now();
-      upsertTask(task);
+    } catch {
+      // keep polling
     }
   }
 }
 
-function activateTask(id) {
-  const task = state.tasks.find((item) => item.id === id);
-  if (!task) return;
-  state.activeTaskId = id;
-  renderCurrentTaskText(task);
-  renderResult(task);
-  renderTasks();
+function startPolling(force = false) {
+  if (state.pollingActive && !force) return;
+  state.pollingActive = true;
+
+  const loop = async () => {
+    try {
+      await pollTasks();
+    } finally {
+      if (state.pollingActive) {
+        state.pollingTimerId = window.setTimeout(loop, POLL_INTERVAL_MS);
+      }
+    }
+  };
+
+  if (state.pollingTimerId) {
+    window.clearTimeout(state.pollingTimerId);
+    state.pollingTimerId = null;
+  }
+
+  void loop();
 }
 
-function renderCurrentTaskText(task) {
-  elements.currentPrompt.textContent = task.prompt;
-  elements.taskModeBadge.textContent = statusText(task.status);
-  if (task.status === "succeeded") setStatus("生成完成，结果会保留 48 小时。", "success");
-  else if (task.status === "failed") setStatus(task.error || "生成失败。", "error");
-  else setStatus(`后台生成中：${task.progress || task.status}`, "loading");
-}
-
-function renderResult(task) {
-  elements.resultStage.innerHTML = "";
-  elements.downloadButton.disabled = true;
-  state.currentImageUrl = "";
-  state.currentFileName = "";
-
-  if (task.status === "succeeded" && task.imageUrl) {
-    const settings = getSettings();
-    const image = document.createElement("img");
-    image.src = buildApiUrl(settings, `${task.imageUrl}?t=${task.updatedAt}`);
-    image.alt = task.prompt;
-    elements.resultStage.appendChild(image);
-    state.currentImageUrl = image.src;
-    state.currentFileName = `aiswing-${task.id}.${task.format || "png"}`;
-    elements.downloadButton.disabled = false;
+async function removeTask(taskId) {
+  const settings = getSettings();
+  if (!settings.apiKey) {
+    setStatus("请先填写 API Key", "error");
     return;
   }
-
-  const wrapper = document.createElement("div");
-  wrapper.className = "empty-state";
-  const title = task.status === "failed" ? "生成失败" : "后台任务进行中";
-  const detail = task.status === "failed"
-    ? escapeHtml(task.error || "未知错误")
-    : escapeHtml(task.progress || "任务排队中");
-  wrapper.innerHTML = `<span></span><h3>${title}</h3><p>${detail}</p>`;
-  elements.resultStage.appendChild(wrapper);
-}
-
-function renderTasks() {
-  elements.taskList.innerHTML = "";
-  elements.taskCount.textContent = state.tasks.length.toString();
-  elements.successCount.textContent = state.tasks.filter((task) => task.status === "succeeded").length.toString();
-
-  if (!state.tasks.length) {
-    const empty = document.createElement("div");
-    empty.className = "empty-state";
-    empty.innerHTML = "<h3>暂无任务</h3><p>生成后会自动保存到这里。</p>";
-    elements.taskList.appendChild(empty);
-    return;
-  }
-
-  state.tasks.forEach((task) => {
-    const node = elements.taskTemplate.content.firstElementChild.cloneNode(true);
-    node.dataset.status = task.status === "succeeded" ? "success" : task.status === "failed" ? "error" : "loading";
-    node.classList.toggle("active", task.id === state.activeTaskId);
-    node.querySelector("strong").textContent = task.prompt;
-    node.querySelector("span").textContent = `${task.model} · ${task.size} · ${statusText(task.status)}`;
-    renderTaskThumbnail(task, node.querySelector(".task-thumb"));
-    node.addEventListener("click", () => activateTask(task.id));
-    elements.taskList.appendChild(node);
-  });
-}
-
-function renderTaskThumbnail(task, container) {
-  container.innerHTML = "";
-  if (task.status === "succeeded" && task.imageUrl) {
-    const image = document.createElement("img");
-    image.src = buildApiUrl(getSettings(), `${task.imageUrl}?thumb=${task.updatedAt}`);
-    image.alt = task.prompt;
-    container.appendChild(image);
+  try {
+    const response = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(taskId)}`), {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    await parseJsonResponse(response);
+    state.tasks = state.tasks.filter((task) => task.id !== taskId);
+    persistLocalTasks();
+    if (state.selectedTaskId === taskId) {
+      state.selectedTaskId = state.tasks[0]?.id || null;
+    }
+    renderTaskList();
+    refreshTaskCounters();
+    renderSelectedTask();
+    setStatus("任务已删除", "success");
+  } catch (error) {
+    setStatus(error.message, "error");
   }
 }
 
-function statusText(status) {
-  return {
-    pending: "排队中",
-    running: "生成中",
-    succeeded: "已完成",
-    failed: "失败",
-  }[status] || status;
+async function clearLocalTasks() {
+  if (!confirm("确认清空本地任务缓存吗？服务端数据不会删除。")) return;
+  state.tasks = [];
+  state.selectedTaskId = null;
+  persistLocalTasks();
+  renderTaskList();
+  refreshTaskCounters();
+  renderSelectedTask();
+  setStatus("本地缓存已清空", "success");
 }
 
-function setStatus(message, type) {
-  elements.statusBox.textContent = message;
-  elements.statusBox.className = `status-box ${type || "idle"}`;
+function createDraft() {
+  state.selectedTaskId = DRAFT_TASK_ID;
+  renderTaskList();
+  elements.promptInput.focus();
+  renderSelectedTask();
 }
 
 function fillDemo() {
-  elements.promptInput.value = "A premium product poster for a cute orange cat astronaut sticker, clean pastel background, crisp edges, soft studio light, playful and commercial, no text, no watermark.";
+  elements.promptInput.value = "A premium product poster for a cute orange cat astronaut sticker, clean pastel background, crisp edges, soft studio lighting, no text, no watermark.";
   persistSettings();
-  renderCurrentPrompt();
+  setStatus("已填入示例提示词", "success");
 }
 
-function toggleApiKey() {
-  const showing = elements.apiKeyInput.type === "text";
-  elements.apiKeyInput.type = showing ? "password" : "text";
-  elements.toggleKeyButton.textContent = showing ? "显示" : "隐藏";
-}
-
-async function copyPrompt() {
-  await navigator.clipboard.writeText(elements.currentPrompt.textContent);
-  setStatus("提示词已复制。", "success");
+function toggleApiKeyVisibility() {
+  const isText = elements.apiKeyInput.type === "text";
+  elements.apiKeyInput.type = isText ? "password" : "text";
+  elements.toggleKeyButton.textContent = isText ? "显示" : "隐藏";
 }
 
 async function copyCurl() {
   const settings = getSettings();
-  const payload = {
-    model: settings.model,
-    prompt: settings.prompt || "your prompt",
-    size: settings.size,
-    response_format: "b64_json",
-    output_format: settings.format || "png",
-  };
-  if (settings.quality) payload.quality = settings.quality;
-  const command = `curl --location '${buildApiUrl(settings, "/api/tasks")}' \\
---header 'Authorization: Bearer ${settings.apiKey || "sk-your-key"}' \\
---header 'Content-Type: application/json' \\
---data '${JSON.stringify(payload, null, 2)}'`;
+  const payload = await createTaskPayload();
+  const command = `curl --location '${buildApiUrl("/api/tasks")}' \
+  --header 'Authorization: Bearer ${settings.apiKey || "sk-your-key"}' \
+  --header 'Content-Type: application/json' \
+  --data '${JSON.stringify(payload, null, 2)}'`;
   await navigator.clipboard.writeText(command);
-  setStatus("API 请求已复制。", "success");
+  setStatus("API 请求已复制", "success");
 }
 
 function downloadCurrentImage() {
@@ -461,73 +773,20 @@ function downloadCurrentImage() {
   link.remove();
 }
 
-async function clearTasks() {
-  if (!confirm("确定清空本地任务列表吗？服务器里的任务会在 48 小时后自动清理。")) return;
-  state.tasks = [];
-  state.activeTaskId = null;
-  persistTasks();
-  renderTasks();
-  elements.resultStage.innerHTML = `<div class="empty-state"><span></span><h3>还没有图片</h3><p>生成完成后，图片会显示在这里并自动加入右侧任务列表。</p></div>`;
-  setStatus("本地任务列表已清空。", "success");
-}
-
 async function updateFromGit() {
-  const token = prompt("请输入后台更新密钥 UPDATE_TOKEN：");
+  const token = prompt("请输入 UPDATE_TOKEN");
   if (!token) return;
-  if (!confirm("确认从 GitHub 拉取最新代码并重启服务吗？data 目录不会删除。")) return;
-  elements.updateButton.disabled = true;
-  setStatus("正在提交更新请求，请稍候...", "loading");
   try {
-    const response = await fetch(`${getDefaultBaseUrl()}/api/update`, {
+    const response = await fetch(`${getSettings().baseUrl}/api/update`, {
       method: "POST",
       headers: { "X-Update-Token": token },
     });
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(data.error?.message || `HTTP ${response.status}`);
-    setStatus("更新已开始。服务会自动拉取 GitHub 最新代码并重启，稍后刷新页面。", "success");
-    pollUpdateStatus(token);
+    const data = await parseJsonResponse(response);
+    if (!response.ok) throw new Error(data?.error?.message || `HTTP ${response.status}`);
+    setStatus("更新已触发，服务将自动重启", "success");
   } catch (error) {
-    setStatus(`更新失败：${error.message}`, "error");
-    elements.updateButton.disabled = false;
+    setStatus(error.message, "error");
   }
-}
-
-async function pollUpdateStatus(token) {
-  for (let i = 0; i < 60; i += 1) {
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-    try {
-      const response = await fetch(`${getDefaultBaseUrl()}/api/update`, {
-        headers: { "X-Update-Token": token },
-        cache: "no-store",
-      });
-      const data = await response.json();
-      if (data.update?.running) {
-        setStatus("更新执行中，请等待服务重启...", "loading");
-        continue;
-      }
-      if (data.update?.exit_code === 0) {
-        setStatus("更新完成，正在刷新页面...", "success");
-        setTimeout(() => window.location.reload(), 1500);
-        return;
-      }
-      if (data.update?.exit_code) {
-        throw new Error(data.update?.error || "Update command failed");
-      }
-    } catch {
-      setStatus("服务正在重启，稍后自动刷新...", "loading");
-    }
-  }
-  elements.updateButton.disabled = false;
-  setStatus("更新请求已发送。如页面未自动刷新，请稍后手动刷新。", "success");
-}
-
-function formatTime(timestamp) {
-  return new Intl.DateTimeFormat("zh-CN", {
-    hour: "2-digit",
-    minute: "2-digit",
-    month: "2-digit",
-    day: "2-digit",
-  }).format(new Date(timestamp));
 }
 
 function escapeHtml(value) {
@@ -538,3 +797,10 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#039;");
 }
+
+window.addEventListener("beforeunload", () => {
+  resetCurrentImage();
+  for (const file of state.references) {
+    if (file.previewUrl) URL.revokeObjectURL(file.previewUrl);
+  }
+});

@@ -13,7 +13,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050608";
+const build = "2026050715";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -74,6 +74,8 @@ CREATE TABLE IF NOT EXISTS tasks (
   size TEXT NOT NULL,
   quality TEXT,
   format TEXT NOT NULL,
+  reference_images TEXT,
+  reference_count INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
   progress TEXT,
   result_path TEXT,
@@ -89,19 +91,31 @@ CREATE INDEX IF NOT EXISTS idx_tasks_hash_created ON tasks(api_key_hash, created
 CREATE INDEX IF NOT EXISTS idx_tasks_expires ON tasks(expires_at);
 `);
 
+function ensureColumn(tableName, columnName, definition) {
+  const columns = db.prepare(`PRAGMA table_info(${tableName})`).all();
+  if (!columns.some((column) => column.name === columnName)) {
+    db.exec(`ALTER TABLE ${tableName} ADD COLUMN ${columnName} ${definition}`);
+  }
+}
+
+ensureColumn("tasks", "reference_images", "TEXT");
+ensureColumn("tasks", "reference_count", "INTEGER NOT NULL DEFAULT 0");
+
 const statements = {
   insertTask: db.prepare(`
     INSERT INTO tasks (
       id, api_key_hash, api_key_enc, model, prompt, size, quality, format,
+      reference_images, reference_count,
       status, progress, created_at, updated_at
     ) VALUES (
       @id, @api_key_hash, @api_key_enc, @model, @prompt, @size, @quality, @format,
+      @reference_images, @reference_count,
       @status, @progress, @created_at, @updated_at
     )
   `),
   getTask: db.prepare("SELECT * FROM tasks WHERE id = ?"),
   listTasksByHash: db.prepare(`
-    SELECT id, model, prompt, size, quality, format, status, progress, error_message,
+    SELECT id, model, prompt, size, quality, format, reference_count, status, progress, error_message,
            created_at, started_at, completed_at, expires_at, updated_at
     FROM tasks
     WHERE api_key_hash = ?
@@ -121,14 +135,16 @@ const statements = {
   markSucceeded: db.prepare(`
     UPDATE tasks
     SET status = 'succeeded', progress = @progress, result_path = @result_path,
-        api_key_enc = NULL, completed_at = @completed_at, expires_at = @expires_at,
+        api_key_enc = NULL, reference_images = NULL,
+        completed_at = @completed_at, expires_at = @expires_at,
         updated_at = @updated_at
     WHERE id = @id
   `),
   markFailed: db.prepare(`
     UPDATE tasks
     SET status = 'failed', progress = @progress, error_message = @error_message,
-        api_key_enc = NULL, completed_at = @completed_at, expires_at = @expires_at,
+        api_key_enc = NULL, reference_images = NULL,
+        completed_at = @completed_at, expires_at = @expires_at,
         updated_at = @updated_at
     WHERE id = @id
   `),
@@ -182,6 +198,8 @@ function safeTask(task) {
     size: task.size,
     quality: task.quality || "",
     format: task.format || "png",
+    mode: task.reference_count > 0 ? "edit" : "generate",
+    reference_count: task.reference_count || 0,
     status: task.status,
     progress: task.progress || "",
     error_message: task.error_message || "",
@@ -192,6 +210,23 @@ function safeTask(task) {
     expires_at: task.expires_at,
     updated_at: task.updated_at,
   };
+}
+
+function normalizeReferenceImages(value) {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => {
+      const raw = typeof item === "string" ? item : item?.image_url || item?.data_url || item?.dataUrl || "";
+      const imageUrl = String(raw || "").trim();
+      if (!imageUrl) return "";
+      if (/^data:image\/(?:png|jpe?g|webp);base64,[a-z0-9+/=\s]+$/i.test(imageUrl)) {
+        return imageUrl.replace(/\s/g, "");
+      }
+      if (/^https?:\/\//i.test(imageUrl)) return imageUrl;
+      return "";
+    })
+    .filter(Boolean)
+    .slice(0, 8);
 }
 
 function requireBearer(req) {
@@ -247,6 +282,8 @@ async function processTask(taskId) {
       output_format: task.format || "png",
     };
     if (task.quality) payload.quality = task.quality;
+    const references = normalizeReferenceImages(JSON.parse(task.reference_images || "[]"));
+    if (references.length) payload.reference_images = references;
 
     const b64 = await generateImageB64(payload, apiKey, (progress) => {
       statements.updateProgress.run({ id: taskId, progress, updated_at: nowMs() });
@@ -447,7 +484,16 @@ function imagePayloadToResponsesPayload(pathname, payload) {
   }
 
   let input = payload.prompt || payload.input || "";
-  if (pathname === "/v1/images/edits") {
+  const referenceImages = normalizeReferenceImages(
+    payload.reference_images || payload.referenceImages || payload.images || payload.input_images,
+  );
+  if (referenceImages.length) {
+    const content = [];
+    const prompt = String(payload.prompt || "");
+    if (prompt) content.push({ type: "input_text", text: prompt });
+    for (const imageUrl of referenceImages) content.push({ type: "input_image", image_url: imageUrl });
+    input = [{ role: "user", content }];
+  } else if (pathname === "/v1/images/edits") {
     // Browser FormData uploads are forwarded directly by forwardRawApi.
     // JSON edit payloads may pass an input array already.
     input = payload.input || payload.prompt || "";
@@ -563,7 +609,7 @@ async function parseResponsesStream(upstreamResponse) {
   }
 
   if (!upstreamResponse.body) {
-    return { ok: false, status: 502, text: JSON.stringify({ error: { message: "Responses API 没有返回可读取的流" } }) };
+    return { ok: false, status: 502, text: JSON.stringify({ error: { message: "Responses API returned no readable stream" } }) };
   }
 
   const reader = upstreamResponse.body.getReader();
@@ -609,7 +655,7 @@ async function parseResponsesStream(upstreamResponse) {
     return {
       ok: false,
       status: 502,
-      text: JSON.stringify({ error: { message: `读取 Responses 流失败：${error.message}` }, raw: rawPreview.slice(0, 1000) }),
+      text: JSON.stringify({ error: { message: `Failed to read Responses stream: ${error.message}` }, raw: rawPreview.slice(0, 1000) }),
     };
   } finally {
     try { reader.releaseLock(); } catch {}
@@ -618,7 +664,7 @@ async function parseResponsesStream(upstreamResponse) {
   return {
     ok: false,
     status: 502,
-    text: JSON.stringify({ error: { message: "Responses API 没有返回图片数据" }, raw: rawPreview.slice(0, 1000) }),
+    text: JSON.stringify({ error: { message: "Responses API returned no image data" }, raw: rawPreview.slice(0, 1000) }),
   };
 }
 
@@ -837,6 +883,9 @@ async function handleTasksApi(req, res, requestUrl) {
       return;
     }
 
+    const referenceImages = normalizeReferenceImages(
+      payload.reference_images || payload.referenceImages || payload.images || payload.input_images,
+    );
     const createdAt = nowMs();
     const task = {
       id: createTaskId(),
@@ -847,6 +896,8 @@ async function handleTasksApi(req, res, requestUrl) {
       size: payload.size || "1024x1024",
       quality: payload.quality || "",
       format: getOutputFormat(payload),
+      reference_images: referenceImages.length ? JSON.stringify(referenceImages) : null,
+      reference_count: referenceImages.length,
       status: "pending",
       progress: "pending",
       created_at: createdAt,
@@ -989,8 +1040,8 @@ async function proxyApi(req, res, requestUrl) {
       "X-Aiswing-Proxy": "node-backend-responses",
     });
   } catch (error) {
-    const cause = error.cause ? `；${error.cause.code || ""} ${error.cause.message || ""}`.trim() : "";
-    sendJson(res, 502, { error: { message: `后端请求上游失败：${error.message}${cause}` } });
+    const cause = error.cause ? ` ${error.cause.code || ""} ${error.cause.message || ""}`.trim() : "";
+    sendJson(res, 502, { error: { message: `Backend upstream request failed: ${error.message}${cause ? ` (${cause})` : ""}` } });
   }
 }
 
@@ -1025,7 +1076,7 @@ function serveStatic(req, res, requestUrl) {
     const ext = path.extname(filePath).toLowerCase();
     res.writeHead(200, {
       "Content-Type": mimeTypes[ext] || "application/octet-stream",
-      "Cache-Control": ext === ".html" ? "no-store" : "public, max-age=300",
+      "Cache-Control": [".html", ".css", ".js"].includes(ext) ? "no-store" : "public, max-age=300",
     });
     if (req.method === "HEAD") {
       res.end();
