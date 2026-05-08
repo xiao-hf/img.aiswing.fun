@@ -1,5 +1,7 @@
 # Aiswing Image Studio
 
+English | [简体中文](README.zh-CN.md)
+
 A Docker Compose deployable image-generation workspace. The browser only calls same-origin APIs. The Node backend uses a SQLite task queue, calls `cdn.aiswing.fun` asynchronously, saves generated images on disk, and cleans completed tasks after 48 hours.
 
 ## Features
@@ -13,6 +15,8 @@ A Docker Compose deployable image-generation workspace. The browser only calls s
 - Frontend static files are under `frontend/`
 - Optional one-click web update, similar to sub2api
 - Default upstream: `https://cdn.aiswing.fun`
+- Language switcher: Chinese / English
+- Theme switcher: Light / Dark mode
 
 ## Project layout
 
