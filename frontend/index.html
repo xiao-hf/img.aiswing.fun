@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Aiswing Image Studio</title>
-    <link rel="stylesheet" href="./styles.css?v=2026050933" />
+    <link rel="stylesheet" href="./styles.css?v=2026050939" />
       <style>
       /* critical-fullscreen-layout */
       html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
@@ -20,7 +20,7 @@
             <button id="refreshTasksButton" class="secondary small" type="button">刷新</button>
             <button id="clearLocalButton" class="secondary small" type="button">清空</button>
           </div>
-          <a class="secondary small doc-button" href="./docs.html" target="_blank" rel="noopener">API 文档</a>
+          <a class="secondary small doc-button" id="docsLink" href="./docs.html" target="_blank" rel="noopener">API 文档</a>
         </div>
         <div class="sidebar-meta">
           <span><strong id="taskCount">0</strong> 个任务</span>
@@ -31,11 +31,7 @@
 
       <main class="main-pane">
         <div class="main-header">
-          <button id="langToggle" class="lang-toggle" type="button" aria-label="切换语言" title="切换语言">
-            <span class="lang-zh">中文</span>
-            <span class="lang-en">EN</span>
-          </button>
-          <button id="themeToggle" class="theme-toggle" type="button" aria-label="切换主题" title="切换深色/浅色模式">
+          <button id="langToggle" class="lang-toggle" type="button" aria-label="切换语言" title="切换语言"><span class="lang-zh">中文</span><span class="lang-en">EN</span></button><button id="themeToggle" class="theme-toggle" type="button" aria-label="切换主题" title="切换深色/浅色模式">
             <svg class="sun-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <circle cx="12" cy="12" r="5"/>
               <line x1="12" y1="1" x2="12" y2="3"/>
@@ -151,6 +147,6 @@
       </article>
     </template>
 
-    <script src="./app.js?v=2026050933"></script>
+    <script src="./app.js?v=2026050939"></script>
   </body>
 </html>
