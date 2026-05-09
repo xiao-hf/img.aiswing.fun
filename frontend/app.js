@@ -6,6 +6,7 @@ const LANG_KEY = "aiswing-image-studio-lang";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
+const STREAM_CDN_ENDPOINT = "https://cdn.aiswing.fun/v1/images/generations/events";
 
 const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
@@ -253,18 +254,22 @@ function bindEvents() {
   elements.copyPromptButton?.addEventListener("click", copyPrompt);
 }
 
-function copyPrompt() {
+async function copyPrompt(event) {
+  const button = event?.currentTarget;
   const prompt = elements.promptInput.value.trim();
   if (!prompt) {
-    showStatus("No prompt to copy", "error");
+    setStatus(isZh() ? "\u6ca1\u6709\u53ef\u590d\u5236\u7684\u63d0\u793a\u8bcd" : "No prompt to copy", "error");
+    flashButton(button, isZh() ? "\u65e0\u5185\u5bb9" : "Empty");
     return;
   }
-  navigator.clipboard.writeText(prompt).then(() => {
-    const lang = document.documentElement.getAttribute("lang") || "zh";
-    showStatus(lang === "zh" ? "已复制提示词" : "Prompt copied", "success");
-  }).catch(() => {
-    showStatus("Copy failed", "error");
-  });
+  try {
+    await copyText(prompt);
+    setStatus(isZh() ? "\u63d0\u793a\u8bcd\u5df2\u590d\u5236" : "Prompt copied", "success");
+    flashButton(button, isZh() ? "\u5df2\u590d\u5236" : "Copied");
+  } catch {
+    setStatus(isZh() ? "\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236" : "Copy failed, please copy manually", "error");
+    flashButton(button, isZh() ? "\u590d\u5236\u5931\u8d25" : "Failed");
+  }
 }
 
 function hydrateSettings() {
@@ -765,12 +770,18 @@ function renderSelectedTask() {
   const copyCurlTaskButton = actions.querySelector("#copyCurlTaskButton");
 
   copyPromptButton.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(task.prompt || "");
-    setStatus("提示词已复制", "success");
+    try {
+      await copyText(task.prompt || "");
+      setStatus(isZh() ? "\u63d0\u793a\u8bcd\u5df2\u590d\u5236" : "Prompt copied", "success");
+      flashButton(copyPromptButton, isZh() ? "\u5df2\u590d\u5236" : "Copied");
+    } catch {
+      setStatus(isZh() ? "\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236" : "Copy failed, please copy manually", "error");
+      flashButton(copyPromptButton, isZh() ? "\u590d\u5236\u5931\u8d25" : "Failed");
+    }
   });
 
   downloadButton.addEventListener("click", downloadCurrentImage);
-  copyCurlTaskButton.addEventListener("click", copyCurl);
+  copyCurlTaskButton.addEventListener("click", () => copyTaskCurl(task, copyCurlTaskButton));
 
   if (resultImage) {
     void loadTaskImageBlob(task, resultImage, stage, downloadButton, imageLoadToken);
@@ -958,16 +969,114 @@ function toggleApiKeyVisibility() {
   elements.toggleKeyButton.textContent = isText ? "显示" : "隐藏";
 }
 
-async function copyCurl() {
-  const settings = getSettings();
-  const payload = await createTaskPayload();
-  const safePayload = JSON.stringify(payload, null, 2);
-  const command = `curl --location '${window.location.origin}/api/tasks' \
-  --header 'Authorization: Bearer ${settings.apiKey || "sk-your-key"}' \
-  --header 'Content-Type: application/json' \
-  --data '${safePayload}'`;
-  await navigator.clipboard.writeText(command);
-  setStatus("curl\u5DF2\u590D\u5236", "success");
+async function copyCurl(event) {
+  const button = event?.currentTarget;
+  try {
+    const payload = await createTaskPayload();
+    await copyText(buildCurlCommand(payload));
+    setStatus(isZh() ? "curl \u5df2\u590d\u5236" : "curl copied", "success");
+    flashButton(button, isZh() ? "\u5df2\u590d\u5236" : "Copied");
+  } catch (error) {
+    setStatus(error.message || (isZh() ? "\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236" : "Copy failed, please copy manually"), "error");
+    flashButton(button, isZh() ? "\u590d\u5236\u5931\u8d25" : "Failed");
+  }
+}
+
+async function copyTaskCurl(task, button) {
+  try {
+    const payload = taskToPayload(task);
+    await copyText(buildCurlCommand(payload));
+    setStatus(isZh() ? "\u5f53\u524d\u4efb\u52a1\u8bf7\u6c42\u5df2\u590d\u5236" : "Task request copied", "success");
+    flashButton(button, isZh() ? "\u5df2\u590d\u5236" : "Copied");
+  } catch (error) {
+    setStatus(error.message || (isZh() ? "\u590d\u5236\u5931\u8d25\uff0c\u8bf7\u624b\u52a8\u590d\u5236" : "Copy failed, please copy manually"), "error");
+    flashButton(button, isZh() ? "\u590d\u5236\u5931\u8d25" : "Failed");
+  }
+}
+
+function taskToPayload(task) {
+  return {
+    model: task?.model || elements.modelSelect.value,
+    prompt: task?.prompt || "",
+    size: task?.size || elements.sizeSelect.value,
+    quality: task?.quality || elements.qualitySelect.value,
+    format: task?.format || elements.formatSelect.value,
+    reference_images: task?.reference_count > 0 ? ["data:image/png;base64,..."] : [],
+  };
+}
+
+function toCdnStreamPayload(payload) {
+  const normalized = {
+    model: payload.model || "gpt-image-2",
+    prompt: payload.prompt || "",
+    size: payload.size || "1024x1024",
+    quality: payload.quality || "high",
+    format: payload.format || "png",
+  };
+  const references = Array.isArray(payload.reference_images)
+    ? payload.reference_images.filter(Boolean)
+    : [];
+  if (references.length) normalized.reference_images = references;
+  return normalized;
+}
+
+function buildCurlCommand(payload, apiKey = getSettings().apiKey) {
+  const safePayload = shellSingleQuote(JSON.stringify(toCdnStreamPayload(payload), null, 2));
+  return [
+    `curl --location --request POST ${shellSingleQuote(STREAM_CDN_ENDPOINT)} \\`,
+    `  --header ${shellSingleQuote(`Authorization: Bearer ${apiKey || "sk-your-key"}`)} \\`,
+    `  --header 'Content-Type: application/json' \\`,
+    `  --header 'Accept: text/event-stream' \\`,
+    `  --data-raw ${safePayload}`,
+  ].join("\n");
+}
+
+function shellSingleQuote(value) {
+  return `'${String(value).replaceAll("'", "'\\''")}'`;
+}
+
+async function copyText(value) {
+  const text = String(value || "");
+  if (!text) throw new Error(isZh() ? "\u6ca1\u6709\u53ef\u590d\u5236\u5185\u5bb9" : "Nothing to copy");
+
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return;
+    } catch {
+      // fallback below for non-HTTPS/IP access or browser policy blocks
+    }
+  }
+
+  const textarea = document.createElement("textarea");
+  textarea.value = text;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
+  textarea.style.top = "0";
+  document.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  textarea.setSelectionRange(0, textarea.value.length);
+  const ok = document.execCommand("copy");
+  textarea.remove();
+  if (!ok) throw new Error(isZh() ? "\u6d4f\u89c8\u5668\u62d2\u7edd\u590d\u5236\uff0c\u8bf7\u624b\u52a8\u590d\u5236" : "Browser blocked copy, please copy manually");
+}
+
+function flashButton(button, text, duration = 1200) {
+  if (!button || !text) return;
+  const previous = button.textContent;
+  const wasDisabled = button.disabled;
+  button.textContent = text;
+  button.disabled = true;
+  window.setTimeout(() => {
+    button.textContent = previous;
+    button.disabled = wasDisabled;
+  }, duration);
+}
+
+function isZh() {
+  return (document.documentElement.getAttribute("lang") || "zh") !== "en";
 }
 
 function downloadCurrentImage() {
