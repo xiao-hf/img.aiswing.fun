@@ -749,7 +749,6 @@ function renderSelectedTask() {
     stage.innerHTML = `<div class="empty-inner"><strong>${isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210" : "Image ready"}</strong><span>${isZh() ? "\u6b63\u5728\u52a0\u8f7d\u539f\u56fe..." : "Loading original..."}</span></div>`;
     resultImage = document.createElement("img");
     resultImage.alt = task.prompt || (isZh() ? "\u751f\u6210\u7ed3\u679c" : "Generated image");
-    if (task.preview_b64) resultImage.src = dataImageUrl(task.preview_b64, task.format);
     setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u6b63\u5728\u52a0\u8f7d\u539f\u56fe" : "Image ready, loading original", "loading");
   } else if ((task.status === "running" || task.status === "pending") && task.preview_b64) {
     stage.innerHTML = "";
