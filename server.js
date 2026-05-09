@@ -14,7 +14,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050951";
+const build = "2026050953";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -29,7 +29,7 @@ const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
 const upstreamAcceptPartialFallback = !["0", "false", "no", "off"].includes(
   String(process.env.UPSTREAM_ACCEPT_PARTIAL_FALLBACK || "true").trim().toLowerCase(),
 );
-const taskMaxRetries = Math.max(0, Math.floor(Number(process.env.TASK_MAX_RETRIES || 2)));
+const taskMaxRetries = Math.max(0, Math.floor(Number(process.env.TASK_MAX_RETRIES || 0)));
 const taskRetryBaseDelayMs = Math.max(0, Number(process.env.TASK_RETRY_BASE_DELAY_MS || 3000));
 const updateToken = process.env.UPDATE_TOKEN || "";
 const updateCommand = process.env.UPDATE_COMMAND || "rm -rf /tmp/aiswing-image-studio-update && git clone --depth 1 https://github.com/xiao-hf/img.aiswing.fun.git /tmp/aiswing-image-studio-update && cp -a /tmp/aiswing-image-studio-update/. /app/ && npm install --omit=dev && node --check server.js";
@@ -629,6 +629,16 @@ function extractImageB64FromSseBuffer(text, includePartial = false) {
   if (split.rest.trim()) candidates.push(split.rest);
   for (const block of candidates) {
     const data = extractSseData(block);
+    if (!data || data === "[DONE]") continue;
+    try {
+      const evt = JSON.parse(data);
+      const b64 = extractImageB64FromEvent(evt, { includePartial });
+      if (b64) return b64;
+    } catch {}
+  }
+  for (const line of String(text || "").split(/\r?\n/)) {
+    if (!line.startsWith("data:")) continue;
+    const data = line.slice(5).trim();
     if (!data || data === "[DONE]") continue;
     try {
       const evt = JSON.parse(data);
