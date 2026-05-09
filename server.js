@@ -13,7 +13,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050944";
+const build = "2026050945";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -300,10 +300,22 @@ async function processTask(taskId) {
     });
   } catch (error) {
     const completedAt = nowMs();
+    const message = error?.message || "Task failed";
+    console.error("[task failed]", {
+      task_id: taskId,
+      model: task.model,
+      size: task.size,
+      quality: task.quality || "",
+      format: task.format || "png",
+      reference_count: task.reference_count || 0,
+      status: error?.status || "",
+      message,
+      stack: error?.stack || "",
+    });
     statements.markFailed.run({
       id: taskId,
       progress: "failed",
-      error_message: error.message || "Task failed",
+      error_message: message,
       completed_at: completedAt,
       expires_at: completedAt + taskTtlHours * 60 * 60 * 1000,
       updated_at: completedAt,
