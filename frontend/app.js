@@ -6,7 +6,8 @@ const LANG_KEY = "aiswing-image-studio-lang";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
-const PREVIEW_TIMEOUT_MS = 120000;
+const PREVIEW_TIMEOUT_MS = 180000;
+const DIRECT_PREVIEW_FALLBACK_MS = 15000;
 const STREAM_CDN_ENDPOINT = "https://cdn.aiswing.fun/v1/responses";
 
 const elements = {
@@ -814,24 +815,27 @@ async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
   state.currentFileName = fileName;
   downloadButton.disabled = false;
 
-  try {
-    await preloadImageElement(img, imageUrl, PREVIEW_TIMEOUT_MS);
-    if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-    stage.innerHTML = "";
-    stage.appendChild(img);
+  let settled = false;
+  let fallbackStarted = false;
+  let fallbackTimerId = 0;
+
+  const isCurrent = () => token === state.imageLoadToken && state.selectedTaskId === task.id;
+  const markReady = () => {
+    if (!isCurrent()) return;
+    settled = true;
+    window.clearTimeout(fallbackTimerId);
+    downloadButton.disabled = false;
     setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u7ed3\u679c\u4fdd\u7559 48 \u5c0f\u65f6" : "Image ready, retained for 48 hours", "success");
-  } catch (directError) {
-    if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-    setStatus(isZh() ? "\u76f4\u8fde\u9884\u89c8\u5931\u8d25\uff0c\u6b63\u5728\u5c1d\u8bd5\u517c\u5bb9\u52a0\u8f7d" : "Direct preview failed, trying fallback", "loading");
+  };
+
+  const startFallback = async (reason) => {
+    if (settled || fallbackStarted || !isCurrent()) return;
+    fallbackStarted = true;
+    window.clearTimeout(fallbackTimerId);
+    setStatus(isZh() ? "\u6b63\u5728\u52a0\u8f7d\u9884\u89c8\u8d44\u6e90" : "Loading preview resource", "loading");
 
     try {
-      const controller = new AbortController();
-      const timeoutId = window.setTimeout(() => controller.abort(), PREVIEW_TIMEOUT_MS);
-      const response = await fetch(imageUrl, {
-        headers: authHeaders(),
-        signal: controller.signal,
-      });
-      window.clearTimeout(timeoutId);
+      const response = await fetchWithTimeout(imageUrl, { headers: authHeaders() }, PREVIEW_TIMEOUT_MS);
       if (!response.ok) {
         let message = `Image read failed HTTP ${response.status}`;
         try {
@@ -842,24 +846,35 @@ async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
         }
         throw new Error(message);
       }
-
       const blob = await response.blob();
-      if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-
+      if (!isCurrent()) return;
+      if (!blob.type.startsWith("image/")) {
+        throw new Error(`Image endpoint returned ${blob.type || "non-image data"}`);
+      }
       const objectUrl = URL.createObjectURL(blob);
       state.currentObjectUrl = objectUrl;
       state.currentImageUrl = objectUrl;
       state.currentFileName = fileName;
+      img.onload = markReady;
+      img.onerror = () => showPreviewError(stage, downloadButton, task, "Downloaded image decode failed");
       img.src = objectUrl;
-      stage.innerHTML = "";
-      stage.appendChild(img);
-      downloadButton.disabled = false;
-      setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u7ed3\u679c\u4fdd\u7559 48 \u5c0f\u65f6" : "Image ready, retained for 48 hours", "success");
-    } catch (fallbackError) {
-      if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-      showPreviewError(stage, downloadButton, task, fallbackError.message || directError.message || "Image preview failed");
+    } catch (error) {
+      if (!isCurrent()) return;
+      showPreviewError(stage, downloadButton, task, error.message || reason || "Image preview failed");
     }
-  }
+  };
+
+  img.decoding = "async";
+  img.loading = "eager";
+  img.onload = markReady;
+  img.onerror = () => startFallback("Image preview failed");
+  stage.innerHTML = "";
+  stage.appendChild(img);
+  img.src = imageUrl;
+  setStatus(isZh() ? "\u6b63\u5728\u52a0\u8f7d\u9884\u89c8\u8d44\u6e90" : "Loading preview resource", "loading");
+  fallbackTimerId = window.setTimeout(() => {
+    void startFallback("Image preview timeout");
+  }, DIRECT_PREVIEW_FALLBACK_MS);
 }
 
 function buildImageUrl(task) {
@@ -871,27 +886,11 @@ function buildImageUrl(task) {
   return buildApiUrl(`${raw}${separator}t=${cacheValue}`);
 }
 
-function preloadImageElement(img, url, timeoutMs) {
-  return new Promise((resolve, reject) => {
-    const timerId = window.setTimeout(() => {
-      cleanup();
-      reject(new Error("Image preview timeout"));
-    }, timeoutMs);
-    function cleanup() {
-      window.clearTimeout(timerId);
-      img.onload = null;
-      img.onerror = null;
-    }
-    img.onload = () => {
-      cleanup();
-      resolve();
-    };
-    img.onerror = () => {
-      cleanup();
-      reject(new Error("Image preview failed"));
-    };
-    img.src = url;
-  });
+function fetchWithTimeout(url, options = {}, timeoutMs = PREVIEW_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = window.setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { ...options, signal: controller.signal })
+    .finally(() => window.clearTimeout(timeoutId));
 }
 
 function showPreviewError(stage, downloadButton, task, message) {
@@ -899,7 +898,7 @@ function showPreviewError(stage, downloadButton, task, message) {
   stage.innerHTML = `
     <div class="empty-inner error">
       <strong>${escapeHtml(message || "Image preview failed")}</strong>
-      ${imageUrl ? `<span>${isZh() ? "\u56fe\u7247\u5df2\u751f\u6210\uff0c\u53ef\u5148\u70b9\u51fb\u4e0b\u8f7d\u67e5\u770b\u3002" : "The image is generated; use download or open original."}</span><a class="secondary small" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">${isZh() ? "\u6253\u5f00\u539f\u56fe" : "Open original"}</a>` : ""}
+      ${imageUrl ? `<span>${isZh() ? "\u56fe\u7247\u5df2\u751f\u6210\uff0c\u53ef\u5148\u70b9\u51fb\u4e0b\u8f7d\u6216\u6253\u5f00\u539f\u56fe\u3002" : "The image is generated; use download or open original."}</span><a class="secondary small" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">${isZh() ? "\u6253\u5f00\u539f\u56fe" : "Open original"}</a>` : ""}
     </div>
   `;
   downloadButton.disabled = !imageUrl;
