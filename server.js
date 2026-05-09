@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050964";
+const build = "2026050965";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -29,9 +29,10 @@ const upstreamPartialImagesRaw = Number(process.env.UPSTREAM_PARTIAL_IMAGES || 0
 const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
   ? Math.max(0, Math.min(3, Math.floor(upstreamPartialImagesRaw)))
   : 0;
-const upstreamAcceptPartialFallback = !["0", "false", "no", "off"].includes(
-  String(process.env.UPSTREAM_ACCEPT_PARTIAL_FALLBACK || "true").trim().toLowerCase(),
-);
+// Never save upstream partial_image frames as final task results.
+// A partial frame is useful for in-progress preview only; persisting it as result_path makes
+// a task look "completed" while the user only gets a blurry preview image.
+const upstreamAcceptPartialFallback = false;
 const taskMaxRetries = Math.max(0, Math.floor(Number(process.env.TASK_MAX_RETRIES || 0)));
 const taskRetryBaseDelayMs = Math.max(0, Number(process.env.TASK_RETRY_BASE_DELAY_MS || 3000));
 const updateToken = process.env.UPDATE_TOKEN || "";
@@ -755,8 +756,10 @@ async function readImageB64FromNodeStream(upstreamResponse, onProgress = () => {
       onProgress(evt.type);
     }
     const partialB64 = extractImageB64FromEvent(evt, { includePartial: true });
-    if (partialB64 && upstreamAcceptPartialFallback) partialFallbackB64 = partialB64;
-    if (partialB64) onProgress(evt.type || "partial_image", partialB64);
+    if (partialB64) {
+      partialFallbackB64 = partialB64;
+      onProgress(evt.type || "partial_image", partialB64);
+    }
     const resultB64 = extractImageB64FromEvent(evt, { includePartial: false }) || evt.b64_json || evt.data?.[0]?.b64_json || "";
     if (resultB64) return resultB64;
     if (evt.type === "error" || evt.error) {
@@ -768,7 +771,7 @@ async function readImageB64FromNodeStream(upstreamResponse, onProgress = () => {
   try {
     for await (const chunk of upstreamResponse) {
       buffer += chunk.toString("utf8");
-      const directB64 = extractImageB64FromPlainJson(buffer, upstreamAcceptPartialFallback);
+      const directB64 = extractImageB64FromPlainJson(buffer, false);
       if (directB64) {
         upstreamResponse.destroy();
         return directB64;
@@ -789,9 +792,8 @@ async function readImageB64FromNodeStream(upstreamResponse, onProgress = () => {
     }
   } catch (error) {
     if (error?.code === "ECONNRESET" || /terminated|aborted|socket hang up/i.test(error?.message || "")) {
-      const bufferedB64 = extractImageB64FromSseBuffer(buffer, upstreamAcceptPartialFallback) || extractImageB64FromPlainJson(buffer, upstreamAcceptPartialFallback);
+      const bufferedB64 = extractImageB64FromSseBuffer(buffer, false) || extractImageB64FromPlainJson(buffer, false);
       if (bufferedB64) return bufferedB64;
-      if (partialFallbackB64) return partialFallbackB64;
       const wrapped = new Error(`Upstream stream disconnected: ${error.message}`);
       wrapped.cause = error;
       throw wrapped;
@@ -799,9 +801,8 @@ async function readImageB64FromNodeStream(upstreamResponse, onProgress = () => {
     throw error;
   }
 
-  const bufferedB64 = extractImageB64FromSseBuffer(buffer, upstreamAcceptPartialFallback) || extractImageB64FromPlainJson(buffer, upstreamAcceptPartialFallback);
+  const bufferedB64 = extractImageB64FromSseBuffer(buffer, false) || extractImageB64FromPlainJson(buffer, false);
   if (bufferedB64) return bufferedB64;
-  if (partialFallbackB64) return partialFallbackB64;
   console.error("[image stream no final image]", {
     endpoint: label,
     last_event_type: lastEventType,
@@ -962,7 +963,7 @@ async function parseResponsesStream(upstreamResponse) {
           continue;
         }
 
-        const resultB64 = extractImageB64FromEvent(evt, { includePartial: true });
+        const resultB64 = extractImageB64FromEvent(evt, { includePartial: false });
         if (resultB64) {
           try { await reader.cancel(); } catch {}
           return {
@@ -1074,7 +1075,7 @@ async function streamResponsesToClient(upstreamResponse, res, outputFormat) {
       return false;
     }
 
-    const resultB64 = extractImageB64FromEvent(evt, { includePartial: true });
+    const resultB64 = extractImageB64FromEvent(evt, { includePartial: false });
     if (resultB64) {
       sendSseEvent(res, "image", {
         type: "proxy.image",
