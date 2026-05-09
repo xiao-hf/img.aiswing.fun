@@ -14,7 +14,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050947";
+const build = "2026050951";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -22,6 +22,15 @@ const taskTtlHours = Number(process.env.TASK_TTL_HOURS || 48);
 const cleanupIntervalMs = Number(process.env.CLEANUP_INTERVAL_MINUTES || 10) * 60 * 1000;
 const keySecret = process.env.KEY_ENCRYPTION_SECRET || "change-this-secret-before-production";
 const workerConcurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 1));
+const upstreamPartialImagesRaw = Number(process.env.UPSTREAM_PARTIAL_IMAGES || 0);
+const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
+  ? Math.max(0, Math.min(3, Math.floor(upstreamPartialImagesRaw)))
+  : 0;
+const upstreamAcceptPartialFallback = !["0", "false", "no", "off"].includes(
+  String(process.env.UPSTREAM_ACCEPT_PARTIAL_FALLBACK || "true").trim().toLowerCase(),
+);
+const taskMaxRetries = Math.max(0, Math.floor(Number(process.env.TASK_MAX_RETRIES || 2)));
+const taskRetryBaseDelayMs = Math.max(0, Number(process.env.TASK_RETRY_BASE_DELAY_MS || 3000));
 const updateToken = process.env.UPDATE_TOKEN || "";
 const updateCommand = process.env.UPDATE_COMMAND || "rm -rf /tmp/aiswing-image-studio-update && git clone --depth 1 https://github.com/xiao-hf/img.aiswing.fun.git /tmp/aiswing-image-studio-update && cp -a /tmp/aiswing-image-studio-update/. /app/ && npm install --omit=dev && node --check server.js";
 const updateTimeoutMs = Number(process.env.UPDATE_TIMEOUT_MS || 10 * 60 * 1000);
@@ -281,13 +290,13 @@ async function processTask(taskId) {
       size: task.size,
       response_format: "b64_json",
       output_format: task.format || "png",
-      partial_images: 2,
     };
+    if (upstreamPartialImages > 0) payload.partial_images = upstreamPartialImages;
     if (task.quality) payload.quality = task.quality;
     const references = normalizeReferenceImages(JSON.parse(task.reference_images || "[]"));
     if (references.length) payload.reference_images = references;
 
-    const b64 = await generateImageB64(payload, apiKey, (progress) => {
+    const b64 = await generateImageB64WithRetry(taskId, payload, apiKey, (progress) => {
       statements.updateProgress.run({ id: taskId, progress, updated_at: nowMs() });
     });
     const resultPath = writeResultImage(taskId, task.format, b64);
@@ -323,6 +332,40 @@ async function processTask(taskId) {
       updated_at: completedAt,
     });
   }
+}
+
+async function generateImageB64WithRetry(taskId, payload, apiKey, onProgress) {
+  let lastError;
+  for (let attempt = 0; attempt <= taskMaxRetries; attempt += 1) {
+    try {
+      if (attempt > 0) onProgress(`retry ${attempt}/${taskMaxRetries}`);
+      return await generateImageB64(payload, apiKey, onProgress);
+    } catch (error) {
+      lastError = error;
+      if (!isRetryableUpstreamError(error) || attempt >= taskMaxRetries) break;
+      const delayMs = taskRetryBaseDelayMs * attempt;
+      console.warn("[task retry]", {
+        task_id: taskId,
+        attempt,
+        next_attempt: attempt + 1,
+        delay_ms: delayMs,
+        message: error?.message || String(error),
+      });
+      if (delayMs > 0) await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+function isRetryableUpstreamError(error) {
+  if (!error) return false;
+  if ([408, 409, 425, 429, 500, 502, 503, 504].includes(Number(error.status))) return true;
+  const message = String(error.message || "");
+  return /upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function cleanupExpiredTasks() {
@@ -533,12 +576,65 @@ function extractImageB64FromEvent(evt, options = {}) {
   if (includePartial && evt.type === "response.image_generation_call.partial_image" && evt.partial_image_b64) {
     return evt.partial_image_b64;
   }
+  const directResult = extractImageResultFromObject(evt, includePartial);
+  if (directResult) return directResult;
   if (evt.type === "response.completed") {
     for (const output of evt.response?.output || []) {
       if (output.type === "image_generation_call" && output.result) {
         return output.result;
       }
     }
+  }
+  return "";
+}
+
+function extractImageResultFromObject(value, includePartial = false) {
+  if (!value || typeof value !== "object") return "";
+  const type = String(value.type || "");
+  if (includePartial && typeof value.partial_image_b64 === "string" && value.partial_image_b64) {
+    return value.partial_image_b64;
+  }
+  if (type.includes("image_generation") && typeof value.result === "string" && value.result) {
+    return value.result;
+  }
+  if (typeof value.b64_json === "string" && value.b64_json) {
+    return value.b64_json;
+  }
+  for (const key of ["item", "output"]) {
+    const nested = extractImageResultFromObject(value[key], includePartial);
+    if (nested) return nested;
+  }
+  if (Array.isArray(value.output)) {
+    for (const item of value.output) {
+      const nested = extractImageResultFromObject(item, includePartial);
+      if (nested) return nested;
+    }
+  }
+  if (Array.isArray(value.content)) {
+    for (const item of value.content) {
+      const nested = extractImageResultFromObject(item, includePartial);
+      if (nested) return nested;
+    }
+  }
+  if (value.response) {
+    const nested = extractImageResultFromObject(value.response, includePartial);
+    if (nested) return nested;
+  }
+  return "";
+}
+
+function extractImageB64FromSseBuffer(text, includePartial = false) {
+  const split = splitSseBlocks(text);
+  const candidates = [...split.blocks];
+  if (split.rest.trim()) candidates.push(split.rest);
+  for (const block of candidates) {
+    const data = extractSseData(block);
+    if (!data || data === "[DONE]") continue;
+    try {
+      const evt = JSON.parse(data);
+      const b64 = extractImageB64FromEvent(evt, { includePartial });
+      if (b64) return b64;
+    } catch {}
   }
   return "";
 }
@@ -561,6 +657,8 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
   }
 
   let buffer = "";
+  let partialFallbackB64 = "";
+  let lastEventType = "";
   try {
     for await (const chunk of upstreamResponse) {
       buffer += chunk.toString("utf8");
@@ -575,7 +673,16 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
         } catch {
           continue;
         }
-        if (evt.type) onProgress(evt.type);
+        if (evt.type) {
+          lastEventType = evt.type;
+          onProgress(evt.type);
+        }
+        if (upstreamAcceptPartialFallback) {
+          const partialB64 = extractImageB64FromEvent(evt, { includePartial: true });
+          if (partialB64 && evt.type === "response.image_generation_call.partial_image") {
+            partialFallbackB64 = partialB64;
+          }
+        }
         const resultB64 = extractImageB64FromEvent(evt);
         if (resultB64) {
           upstreamResponse.destroy();
@@ -588,6 +695,9 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
     }
   } catch (error) {
     if (error?.code === "ECONNRESET" || /terminated|aborted|socket hang up/i.test(error?.message || "")) {
+      const bufferedB64 = extractImageB64FromSseBuffer(buffer, upstreamAcceptPartialFallback);
+      if (bufferedB64) return bufferedB64;
+      if (partialFallbackB64) return partialFallbackB64;
       const wrapped = new Error(`Upstream stream disconnected: ${error.message}`);
       wrapped.cause = error;
       throw wrapped;
@@ -595,6 +705,15 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
     throw error;
   }
 
+  const bufferedB64 = extractImageB64FromSseBuffer(buffer, upstreamAcceptPartialFallback);
+  if (bufferedB64) return bufferedB64;
+
+  if (partialFallbackB64) return partialFallbackB64;
+  console.error("[responses stream no final image]", {
+    last_event_type: lastEventType,
+    partial_fallback_available: Boolean(partialFallbackB64),
+    buffer_tail: buffer.slice(-500),
+  });
   throw new Error("Responses stream ended without final image data");
 }
 
@@ -1141,6 +1260,10 @@ const server = http.createServer((req, res) => {
       data_dir: dataDir,
       update_enabled: Boolean(updateToken),
       task_ttl_hours: taskTtlHours,
+      worker_concurrency: workerConcurrency,
+      upstream_partial_images: upstreamPartialImages,
+      upstream_accept_partial_fallback: upstreamAcceptPartialFallback,
+      task_max_retries: taskMaxRetries,
     });
     return;
   }
