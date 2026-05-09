@@ -634,6 +634,7 @@ function normalizeTask(task) {
     status: task.status || "pending",
     progress: task.progress || "",
     error_message: task.error_message || "",
+    preview_b64: task.preview_b64 || "",
     image_url: task.image_url || "",
     created_at: Number(task.created_at || Date.now()),
     started_at: task.started_at || null,
@@ -745,16 +746,24 @@ function renderSelectedTask() {
 
   let resultImage = null;
   if (task.status === "succeeded" && task.image_url) {
-    stage.innerHTML = `<div class="empty-inner"><strong>图片已完成</strong><span>正在加载预览...</span></div>`;
+    stage.innerHTML = `<div class="empty-inner"><strong>?????</strong><span>??????...</span></div>`;
     resultImage = document.createElement("img");
-    resultImage.alt = task.prompt || "生成结果";
-    setStatus("图片已完成，正在加载预览", "loading");
+    resultImage.alt = task.prompt || "????";
+    if (task.preview_b64) resultImage.src = dataImageUrl(task.preview_b64, task.format);
+    setStatus(isZh() ? "????????????" : "Image ready, loading original", "loading");
+  } else if ((task.status === "running" || task.status === "pending") && task.preview_b64) {
+    stage.innerHTML = "";
+    const previewImage = document.createElement("img");
+    previewImage.alt = task.prompt || "????";
+    previewImage.src = dataImageUrl(task.preview_b64, task.format);
+    stage.appendChild(previewImage);
+    setStatus(isZh() ? "????????" : "Streaming preview", "loading");
   } else if (task.status === "failed") {
-    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(task.error_message || "生成失败")}</div>`;
-    setStatus(task.error_message || "生成失败", "error");
+    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(task.error_message || "????")}</div>`;
+    setStatus(task.error_message || "????", "error");
   } else {
-    stage.innerHTML = `<div class="empty-inner"><strong>${task.status === "pending" ? "排队中" : "生成中"}</strong><span>${escapeHtml(task.progress || "正在处理任务")}</span></div>`;
-    setStatus(task.status === "pending" ? "任务已入队，等待后端处理" : "后端正在生成", "loading");
+    stage.innerHTML = `<div class="empty-inner"><strong>${task.status === "pending" ? "???" : "???"}</strong><span>${escapeHtml(task.progress || "??????")}</span></div>`;
+    setStatus(task.status === "pending" ? "????????????" : "??????", "loading");
   }
 
   const actions = document.createElement("div");
@@ -875,6 +884,14 @@ async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
   fallbackTimerId = window.setTimeout(() => {
     void startFallback("Image preview timeout");
   }, DIRECT_PREVIEW_FALLBACK_MS);
+}
+
+
+function dataImageUrl(b64, format = "png") {
+  const safeFormat = ["png", "jpeg", "jpg", "webp"].includes(String(format).toLowerCase())
+    ? String(format).toLowerCase().replace("jpg", "jpeg")
+    : "png";
+  return `data:image/${safeFormat};base64,${String(b64 || "")}`;
 }
 
 function buildImageUrl(task) {

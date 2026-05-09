@@ -13,8 +13,10 @@ const frontendRoot = path.join(root, "frontend");
 const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/, "");
+const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
+const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050961";
+const build = "2026050962";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -89,6 +91,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   reference_count INTEGER NOT NULL DEFAULT 0,
   status TEXT NOT NULL,
   progress TEXT,
+  preview_b64 TEXT,
   result_path TEXT,
   error_message TEXT,
   created_at INTEGER NOT NULL,
@@ -111,6 +114,7 @@ function ensureColumn(tableName, columnName, definition) {
 
 ensureColumn("tasks", "reference_images", "TEXT");
 ensureColumn("tasks", "reference_count", "INTEGER NOT NULL DEFAULT 0");
+ensureColumn("tasks", "preview_b64", "TEXT");
 
 const statements = {
   insertTask: db.prepare(`
@@ -126,7 +130,7 @@ const statements = {
   `),
   getTask: db.prepare("SELECT * FROM tasks WHERE id = ?"),
   listTasksByHash: db.prepare(`
-    SELECT id, model, prompt, size, quality, format, reference_count, status, progress, result_path, error_message,
+    SELECT id, model, prompt, size, quality, format, reference_count, status, progress, preview_b64, result_path, error_message,
            created_at, started_at, completed_at, expires_at, updated_at
     FROM tasks
     WHERE api_key_hash = ?
@@ -141,6 +145,11 @@ const statements = {
   updateProgress: db.prepare(`
     UPDATE tasks
     SET progress = @progress, updated_at = @updated_at
+    WHERE id = @id
+  `),
+  updatePreview: db.prepare(`
+    UPDATE tasks
+    SET progress = @progress, preview_b64 = @preview_b64, updated_at = @updated_at
     WHERE id = @id
   `),
   markSucceeded: db.prepare(`
@@ -234,6 +243,7 @@ function safeTask(task) {
     reference_count: task.reference_count || 0,
     status: task.status,
     progress: task.progress || "",
+    preview_b64: task.preview_b64 || "",
     error_message: task.error_message || "",
     image_url: imageUrl,
     created_at: task.created_at,
@@ -318,8 +328,13 @@ async function processTask(taskId) {
     const references = normalizeReferenceImages(JSON.parse(task.reference_images || "[]"));
     if (references.length) payload.reference_images = references;
 
-    const b64 = await generateImageB64WithRetry(taskId, payload, apiKey, (progress) => {
-      statements.updateProgress.run({ id: taskId, progress, updated_at: nowMs() });
+    const b64 = await generateImageB64WithRetry(taskId, payload, apiKey, (progress, previewB64 = "") => {
+      const updatedAt = nowMs();
+      if (previewB64) {
+        statements.updatePreview.run({ id: taskId, progress, preview_b64: previewB64, updated_at: updatedAt });
+      } else {
+        statements.updateProgress.run({ id: taskId, progress, updated_at: updatedAt });
+      }
     });
     const resultPath = writeResultImage(taskId, task.format, b64);
     const completedAt = nowMs();
@@ -672,6 +687,10 @@ function extractImageB64FromSseBuffer(text, includePartial = false) {
 }
 
 async function generateImageB64(payload, apiKey, onProgress = () => {}) {
+  if (taskStreamMode) {
+    return generateImageB64ViaResponsesStream(payload, apiKey, onProgress);
+  }
+
   const references = normalizeReferenceImages(payload.reference_images || payload.referenceImages || payload.images || payload.input_images);
   if (references.length) {
     const endpoint = "/v1/images/edits";
@@ -685,6 +704,16 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
   const target = new URL(endpoint, upstream);
   const upstreamResponse = await postJsonStream(target, streamPayload, apiKey);
   return readImageB64FromNodeStream(upstreamResponse, onProgress, endpoint);
+}
+
+async function generateImageB64ViaResponsesStream(payload, apiKey, onProgress = () => {}) {
+  const responsesPayload = imagePayloadToResponsesPayload("/v1/images/generations", {
+    ...payload,
+    partial_images: Math.max(1, Math.min(3, Number(payload.partial_images || upstreamPartialImages || 3))),
+  });
+  const target = new URL("/v1/responses", streamUpstream);
+  const upstreamResponse = await postJsonStream(target, responsesPayload, apiKey);
+  return readImageB64FromNodeStream(upstreamResponse, (progress, previewB64 = "") => onProgress(progress, previewB64), "/v1/responses");
 }
 
 function imagePayloadToImageEndpointPayload(payload) {
@@ -727,6 +756,7 @@ async function readImageB64FromNodeStream(upstreamResponse, onProgress = () => {
     }
     const partialB64 = extractImageB64FromEvent(evt, { includePartial: true });
     if (partialB64 && upstreamAcceptPartialFallback) partialFallbackB64 = partialB64;
+    if (partialB64) onProgress(evt.type || "partial_image", partialB64);
     const resultB64 = extractImageB64FromEvent(evt, { includePartial: false }) || evt.b64_json || evt.data?.[0]?.b64_json || "";
     if (resultB64) return resultB64;
     if (evt.type === "error" || evt.error) {
@@ -1425,6 +1455,8 @@ const server = http.createServer((req, res) => {
       update_enabled: Boolean(updateToken),
       task_ttl_hours: taskTtlHours,
       worker_concurrency: workerConcurrency,
+      stream_upstream: streamUpstream,
+      task_stream_mode: taskStreamMode,
       upstream_partial_images: upstreamPartialImages,
       upstream_accept_partial_fallback: upstreamAcceptPartialFallback,
       task_max_retries: taskMaxRetries,
@@ -1458,5 +1490,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Aiswing app listening on http://${host}:${port}`);
-  console.log(`Compat /v1/images/* -> ${upstream}/v1/images/generations image-endpoint-first`);
+  console.log(`Compat /v1/images/* -> ${taskStreamMode ? streamUpstream + "/v1/responses" : upstream + "/v1/images/generations"}`);
 });

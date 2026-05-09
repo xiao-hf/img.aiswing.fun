@@ -12,6 +12,8 @@ services:
       HOST: 0.0.0.0
       PORT: 3000
       UPSTREAM: ${UPSTREAM:-http://sub2api:8080}
+      STREAM_UPSTREAM: ${STREAM_UPSTREAM:-https://cdn.aiswing.fun}
+      TASK_STREAM_MODE: ${TASK_STREAM_MODE:-false}
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-62914560}
       DATA_DIR: ${DATA_DIR:-/app/data}
       SQLITE_PATH: ${SQLITE_PATH:-/app/data/aiswing.sqlite}
