@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 const http = require("http");
+const https = require("https");
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
@@ -13,7 +14,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050945";
+const build = "2026050947";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -280,6 +281,7 @@ async function processTask(taskId) {
       size: task.size,
       response_format: "b64_json",
       output_format: task.format || "png",
+      partial_images: 2,
     };
     if (task.quality) payload.quality = task.quality;
     const references = normalizeReferenceImages(JSON.parse(task.reference_images || "[]"));
@@ -489,6 +491,9 @@ function imagePayloadToResponsesPayload(pathname, payload) {
     quality: payload.quality || "auto",
     output_format: payload.output_format || payload.format || "png",
   };
+  if (payload.partial_images !== undefined) {
+    tool.partial_images = Math.max(0, Math.min(3, Number(payload.partial_images) || 0));
+  }
   const size = normalizeSize(payload.size);
   if (size) tool.size = size;
   if ((tool.output_format === "jpeg" || tool.output_format === "webp") && payload.output_compression) {
@@ -523,8 +528,9 @@ function getOutputFormat(payload) {
   return payload.output_format || payload.format || "png";
 }
 
-function extractImageB64FromEvent(evt) {
-  if (evt.type === "response.image_generation_call.partial_image" && evt.partial_image_b64) {
+function extractImageB64FromEvent(evt, options = {}) {
+  const includePartial = Boolean(options.includePartial);
+  if (includePartial && evt.type === "response.image_generation_call.partial_image" && evt.partial_image_b64) {
     return evt.partial_image_b64;
   }
   if (evt.type === "response.completed") {
@@ -540,67 +546,90 @@ function extractImageB64FromEvent(evt) {
 async function generateImageB64(payload, apiKey, onProgress = () => {}) {
   const responsesPayload = imagePayloadToResponsesPayload("/v1/images/generations", payload);
   const target = new URL("/v1/responses", upstream);
-  const upstreamResponse = await fetch(target, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify(responsesPayload),
-  });
+  const upstreamResponse = await postJsonStream(target, responsesPayload, apiKey);
 
-  if (!upstreamResponse.ok) {
-    const text = await upstreamResponse.text();
-    let message = text || `HTTP ${upstreamResponse.status}`;
+  if (upstreamResponse.statusCode < 200 || upstreamResponse.statusCode >= 300) {
+    const text = await readNodeResponseText(upstreamResponse);
+    let message = text || `HTTP ${upstreamResponse.statusCode}`;
     try {
       const parsed = JSON.parse(text);
       message = parsed?.error?.message || parsed?.message || message;
     } catch {}
     const error = new Error(message);
-    error.status = upstreamResponse.status;
+    error.status = upstreamResponse.statusCode;
     throw error;
   }
 
-  if (!upstreamResponse.body) throw new Error("Responses API returned no readable stream");
-
-  const reader = upstreamResponse.body.getReader();
-  const decoder = new TextDecoder();
   let buffer = "";
-
   try {
-    while (true) {
-      const { value, done } = await reader.read();
-      if (value) {
-        buffer += decoder.decode(value, { stream: !done });
-        const split = splitSseBlocks(buffer);
-        buffer = split.rest;
-        for (const block of split.blocks) {
-          const data = extractSseData(block);
-          if (!data || data === "[DONE]") continue;
-          let evt;
-          try {
-            evt = JSON.parse(data);
-          } catch {
-            continue;
-          }
-          if (evt.type) onProgress(evt.type);
-          const resultB64 = extractImageB64FromEvent(evt);
-          if (resultB64) {
-            try { await reader.cancel(); } catch {}
-            return resultB64;
-          }
-          if (evt.type === "error" || evt.error) {
-            throw new Error(evt.error?.message || evt.message || "Upstream image generation failed");
-          }
+    for await (const chunk of upstreamResponse) {
+      buffer += chunk.toString("utf8");
+      const split = splitSseBlocks(buffer);
+      buffer = split.rest;
+      for (const block of split.blocks) {
+        const data = extractSseData(block);
+        if (!data || data === "[DONE]") continue;
+        let evt;
+        try {
+          evt = JSON.parse(data);
+        } catch {
+          continue;
+        }
+        if (evt.type) onProgress(evt.type);
+        const resultB64 = extractImageB64FromEvent(evt);
+        if (resultB64) {
+          upstreamResponse.destroy();
+          return resultB64;
+        }
+        if (evt.type === "error" || evt.error) {
+          throw new Error(evt.error?.message || evt.message || "Upstream image generation failed");
         }
       }
-      if (done) break;
     }
-  } finally {
-    try { reader.releaseLock(); } catch {}
+  } catch (error) {
+    if (error?.code === "ECONNRESET" || /terminated|aborted|socket hang up/i.test(error?.message || "")) {
+      const wrapped = new Error(`Upstream stream disconnected: ${error.message}`);
+      wrapped.cause = error;
+      throw wrapped;
+    }
+    throw error;
   }
 
-  throw new Error("Responses stream ended without image data");
+  throw new Error("Responses stream ended without final image data");
+}
+
+function postJsonStream(target, payload, apiKey) {
+  return new Promise((resolve, reject) => {
+    const client = target.protocol === "http:" ? http : https;
+    const body = JSON.stringify(payload);
+    const req = client.request(target, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Accept": "text/event-stream",
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Length": Buffer.byteLength(body),
+        "Connection": "close",
+      },
+      timeout: 900000,
+    }, (res) => {
+      res.setEncoding("utf8");
+      resolve(res);
+    });
+    req.on("timeout", () => req.destroy(new Error("Upstream request timeout")));
+    req.on("error", reject);
+    req.end(body);
+  });
+}
+
+function readNodeResponseText(res) {
+  return new Promise((resolve, reject) => {
+    let text = "";
+    res.setEncoding("utf8");
+    res.on("data", (chunk) => { text += chunk; });
+    res.on("end", () => resolve(text));
+    res.on("error", reject);
+  });
 }
 
 function writeResultImage(taskId, format, b64) {
@@ -652,7 +681,7 @@ async function parseResponsesStream(upstreamResponse) {
           continue;
         }
 
-        const resultB64 = extractImageB64FromEvent(evt);
+        const resultB64 = extractImageB64FromEvent(evt, { includePartial: true });
         if (resultB64) {
           try { await reader.cancel(); } catch {}
           return {
@@ -764,7 +793,7 @@ async function streamResponsesToClient(upstreamResponse, res, outputFormat) {
       return false;
     }
 
-    const resultB64 = extractImageB64FromEvent(evt);
+    const resultB64 = extractImageB64FromEvent(evt, { includePartial: true });
     if (resultB64) {
       sendSseEvent(res, "image", {
         type: "proxy.image",
