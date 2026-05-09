@@ -878,6 +878,10 @@ async function pollTasks() {
       const response = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(task.id)}`), {
         headers: authHeaders(),
       });
+      if (response.status === 404) {
+        dropMissingTask(task.id);
+        continue;
+      }
       const data = await parseJsonResponse(response);
       const fresh = normalizeTask(data.task);
       upsertTask(fresh);
@@ -885,9 +889,21 @@ async function pollTasks() {
         renderSelectedTask();
       }
     } catch {
-      // keep polling
+      // keep polling transient network errors
     }
   }
+}
+
+function dropMissingTask(taskId) {
+  state.tasks = state.tasks.filter((item) => item.id !== taskId);
+  if (state.selectedTaskId === taskId) {
+    state.selectedTaskId = state.tasks[0]?.id || null;
+  }
+  persistLocalTasks();
+  renderTaskList();
+  refreshTaskCounters();
+  renderSelectedTask();
+  setStatus(isZh() ? "\u4efb\u52a1\u5df2\u8fc7\u671f\u6216\u4e0d\u5b58\u5728\uff0c\u5df2\u4ece\u672c\u5730\u79fb\u9664" : "Task expired or not found, removed locally", "error");
 }
 
 function startPolling(force = false) {
