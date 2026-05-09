@@ -867,6 +867,16 @@ async function refreshFromServer(options = {}) {
   }
 }
 
+async function deleteServerTask(taskId) {
+  const response = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(taskId)}`), {
+    method: "DELETE",
+    headers: authHeaders(),
+  });
+  if (response.status === 404) return { ok: true, missing: true };
+  await parseJsonResponse(response);
+  return { ok: true, missing: false };
+}
+
 async function pollTasks() {
   const settings = getSettings();
   if (!settings.apiKey) return;
@@ -936,11 +946,7 @@ async function removeTask(taskId) {
     return;
   }
   try {
-    const response = await fetch(buildApiUrl(`/api/tasks/${encodeURIComponent(taskId)}`), {
-      method: "DELETE",
-      headers: authHeaders(),
-    });
-    await parseJsonResponse(response);
+    await deleteServerTask(taskId);
     state.tasks = state.tasks.filter((task) => task.id !== taskId);
     persistLocalTasks();
     if (state.selectedTaskId === taskId) {
@@ -949,21 +955,50 @@ async function removeTask(taskId) {
     renderTaskList();
     refreshTaskCounters();
     renderSelectedTask();
-    setStatus("任务已删除", "success");
+    await refreshFromServer({ silent: true });
+    setStatus(isZh() ? "任务已从服务器删除" : "Task deleted from server", "success");
   } catch (error) {
     setStatus(error.message, "error");
   }
 }
 
 async function clearLocalTasks() {
-  if (!confirm("确认清空本地任务缓存吗？服务端数据不会删除。")) return;
+  const settings = getSettings();
+  if (!settings.apiKey) {
+    setStatus(isZh() ? "请先填写 API Key" : "Set API Key first", "error");
+    openApiKeyModal();
+    return;
+  }
+  if (!state.tasks.length) {
+    setStatus(isZh() ? "没有可清空的任务" : "No tasks to clear", "idle");
+    return;
+  }
+  if (!confirm(isZh() ? "确认清空本地和服务器任务缓存吗？服务器图片文件也会删除。" : "Clear local and server task cache? Server image files will also be deleted.")) return;
+
+  const ids = [...new Set(state.tasks.map((task) => task.id).filter((id) => id && id !== DRAFT_TASK_ID))];
+  let failed = 0;
+  setStatus(isZh() ? "正在删除服务器任务" : "Deleting server tasks", "loading");
+  for (const taskId of ids) {
+    try {
+      await deleteServerTask(taskId);
+    } catch {
+      failed += 1;
+    }
+  }
+
+  if (failed > 0) {
+    await refreshFromServer({ silent: true });
+    setStatus(isZh() ? `有 ${failed} 个任务删除失败，已同步服务器列表` : `${failed} task(s) failed to delete; synced server list`, "error");
+    return;
+  }
+
   state.tasks = [];
   state.selectedTaskId = null;
   persistLocalTasks();
   renderTaskList();
   refreshTaskCounters();
   renderSelectedTask();
-  setStatus("本地缓存已清空", "success");
+  setStatus(isZh() ? "本地和服务器任务已清空" : "Local and server tasks cleared", "success");
 }
 
 function createDraft() {
