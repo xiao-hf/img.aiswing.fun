@@ -1478,3 +1478,20 @@ html[lang="en"][data-theme="dark"] .theme-toggle::before {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+
+/* result-preview-fit-v2026050961 */
+.result-stage {
+  align-items: center;
+  justify-items: center;
+  contain: layout paint;
+}
+
+.result-stage img {
+  width: 100%;
+  height: 100%;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  object-position: center;
+}
