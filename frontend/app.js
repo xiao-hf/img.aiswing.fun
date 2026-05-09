@@ -6,7 +6,7 @@ const LANG_KEY = "aiswing-image-studio-lang";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
-const STREAM_CDN_ENDPOINT = "https://cdn.aiswing.fun/v1/images/generations/events";
+const STREAM_CDN_ENDPOINT = "https://cdn.aiswing.fun/v1/responses";
 
 const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
@@ -999,35 +999,46 @@ function taskToPayload(task) {
     model: task?.model || elements.modelSelect.value,
     prompt: task?.prompt || "",
     size: task?.size || elements.sizeSelect.value,
-    quality: task?.quality || elements.qualitySelect.value,
+    quality: task?.quality || elements.qualitySelect.value || "auto",
     format: task?.format || elements.formatSelect.value,
     reference_images: task?.reference_count > 0 ? ["data:image/png;base64,..."] : [],
   };
 }
 
 function toCdnStreamPayload(payload) {
-  const normalized = {
-    model: payload.model || "gpt-image-2",
-    prompt: payload.prompt || "",
-    size: payload.size || "1024x1024",
-    quality: payload.quality || "high",
-    format: payload.format || "png",
+  const outputFormat = payload.format || payload.output_format || "png";
+  const tool = {
+    type: "image_generation",
+    quality: payload.quality || "auto",
+    output_format: outputFormat,
   };
+  if (payload.size && payload.size !== "auto") tool.size = payload.size;
+  if ((outputFormat === "jpeg" || outputFormat === "webp") && payload.output_compression) {
+    tool.output_compression = payload.output_compression;
+  }
+
   const references = Array.isArray(payload.reference_images)
     ? payload.reference_images.filter(Boolean)
     : [];
-  if (references.length) normalized.reference_images = references;
-  return normalized;
+  const content = references.map((imageUrl) => ({ type: "input_image", image_url: imageUrl }));
+  content.push({ type: "input_text", text: payload.prompt || "" });
+
+  return {
+    model: payload.model || "gpt-image-2",
+    input: [{ role: "user", content }],
+    tools: [tool],
+    stream: true,
+  };
 }
 
 function buildCurlCommand(payload, apiKey = getSettings().apiKey) {
   const safePayload = shellSingleQuote(JSON.stringify(toCdnStreamPayload(payload), null, 2));
   return [
-    `curl --location --request POST ${shellSingleQuote(STREAM_CDN_ENDPOINT)} \\`,
+    `curl --location ${shellSingleQuote(STREAM_CDN_ENDPOINT)} \\`,
     `  --header ${shellSingleQuote(`Authorization: Bearer ${apiKey || "sk-your-key"}`)} \\`,
     `  --header 'Content-Type: application/json' \\`,
     `  --header 'Accept: text/event-stream' \\`,
-    `  --data-raw ${safePayload}`,
+    `  --data ${safePayload}`,
   ].join("\n");
 }
 

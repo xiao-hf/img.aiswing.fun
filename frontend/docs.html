@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title data-i18n="title">Streaming Image API Docs</title>
-    <link rel="stylesheet" href="./styles.css?v=2026050942" />
+    <link rel="stylesheet" href="./styles.css?v=2026050943" />
     <style>html, body { width: 100%; height: 100%; overflow: hidden; }</style>
     <script>
       const THEME_KEY = "aiswing-image-studio-theme";
@@ -43,11 +43,11 @@
           <p data-i18n="heroDesc">Call any route below directly. The API returns an SSE stream.</p>
           <div class="doc-kv-grid">
             <div><strong>Method</strong><code>POST</code></div>
-            <div><strong>Path</strong><code>/v1/images/generations/events</code></div>
+            <div><strong>Path</strong><code>/v1/responses</code></div>
             <div><strong>Auth</strong><code>Authorization: Bearer sk-your-key</code></div>
             <div><strong>Accept</strong><code>text/event-stream</code></div>
           </div>
-          <p class="doc-note" data-i18n="heroNote">Aiswing proxies this endpoint to Responses streaming image generation.</p>
+          <p class="doc-note" data-i18n="heroNote">Direct Responses streaming image generation.</p>
         </section>
 
         <section class="api-card primary-doc-card" id="text-to-image">
@@ -58,16 +58,26 @@
             </div>
             <span class="route-pill" data-i18n="routeRecommend">Recommended cdn route</span>
           </div>
-          <pre><code>curl --location 'https://cdn.aiswing.fun/v1/images/generations/events' \
+          <pre><code>curl --location 'https://cdn.aiswing.fun/v1/responses' \
   --header 'Authorization: Bearer sk-your-key' \
   --header 'Content-Type: application/json' \
   --header 'Accept: text/event-stream' \
   --data '{
     "model": "gpt-image-2",
-    "prompt": "A premium product poster, clean studio lighting, no text, no watermark",
-    "size": "3840x2160",
-    "quality": "high",
-    "format": "png"
+    "input": [{
+      "role": "user",
+      "content": [{
+        "type": "input_text",
+        "text": "A premium product poster, clean studio lighting, no text, no watermark"
+      }]
+    }],
+    "tools": [{
+      "type": "image_generation",
+      "size": "3840x2160",
+      "quality": "high",
+      "output_format": "png"
+    }],
+    "stream": true
   }'</code></pre>
           <p class="doc-note" data-i18n="textNote">Use 3840x2160 for 4K landscape and 2160x3840 for 4K portrait.</p>
         </section>
@@ -80,19 +90,26 @@
             </div>
             <span class="route-pill">reference_images</span>
           </div>
-          <pre><code>curl --location 'https://cdn.aiswing.fun/v1/images/generations/events' \
+          <pre><code>curl --location 'https://cdn.aiswing.fun/v1/responses' \
   --header 'Authorization: Bearer sk-your-key' \
   --header 'Content-Type: application/json' \
   --header 'Accept: text/event-stream' \
   --data '{
     "model": "gpt-image-2",
-    "prompt": "Keep the same subject, turn it into a cinematic product poster",
-    "size": "3840x2160",
-    "quality": "high",
-    "format": "png",
-    "reference_images": [
-      "data:image/png;base64,iVBORw0KGgoAAA..."
-    ]
+    "input": [{
+      "role": "user",
+      "content": [
+        {"type": "input_image", "image_url": "data:image/png;base64,iVBORw0KGgoAAA..."},
+        {"type": "input_text", "text": "Keep the same subject, turn it into a cinematic product poster"}
+      ]
+    }],
+    "tools": [{
+      "type": "image_generation",
+      "size": "3840x2160",
+      "quality": "high",
+      "output_format": "png"
+    }],
+    "stream": true
   }'</code></pre>
           <p class="doc-note" data-i18n="imageNote">Use data:image/png;base64,... for reference images.</p>
         </section>
@@ -100,9 +117,9 @@
         <section class="api-card" id="routes">
           <h2 data-i18n="routesTitle">Three Routes</h2>
           <div class="route-grid">
-            <div><strong>cdn</strong><code>https://cdn.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeDefault">Default recommended route</span></div>
-            <div><strong>gpt</strong><code>https://gpt.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeBackup">Backup route</span></div>
-            <div><strong>codex</strong><code>https://codex.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeBackup">Backup route</span></div>
+            <div><strong>cdn</strong><code>https://cdn.aiswing.fun/v1/responses</code><span data-i18n="routeDefault">Default recommended route</span></div>
+            <div><strong>gpt</strong><code>https://gpt.aiswing.fun/v1/responses</code><span data-i18n="routeBackup">Backup route</span></div>
+            <div><strong>codex</strong><code>https://codex.aiswing.fun/v1/responses</code><span data-i18n="routeBackup">Backup route</span></div>
           </div>
         </section>
 
@@ -129,7 +146,7 @@
 
         <section class="api-card" id="js-example">
           <h2 data-i18n="jsTitle">JavaScript Streaming Example</h2>
-          <pre><code>const endpoint = "https://cdn.aiswing.fun/v1/images/generations/events";
+          <pre><code>const endpoint = "https://cdn.aiswing.fun/v1/responses";
 const response = await fetch(endpoint, {
   method: "POST",
   headers: {
@@ -139,11 +156,17 @@ const response = await fetch(endpoint, {
   },
   body: JSON.stringify({
     model: "gpt-image-2",
-    prompt: "4K product poster, clean studio lighting",
-    size: "3840x2160",
-    quality: "high",
-    format: "png",
-    reference_images: []
+    input: [{
+      role: "user",
+      content: [{ type: "input_text", text: "4K product poster, clean studio lighting" }]
+    }],
+    tools: [{
+      type: "image_generation",
+      size: "3840x2160",
+      quality: "high",
+      output_format: "png"
+    }],
+    stream: true
   })
 });
 
@@ -191,7 +214,7 @@ while (true) {
           miniNote: "\u6240\u6709\u793a\u4f8b\u53ea\u9700\u8981\u66ff\u6362 <code>sk-your-key</code>\u3002",
           heroTitle: "\u6d41\u5f0f\u751f\u56fe API",
           heroDesc: "\u76f4\u63a5\u8bf7\u6c42\u4e0b\u9762\u4efb\u610f\u4e00\u6761\u7ebf\u8def\u3002\u63a5\u53e3\u8fd4\u56de SSE \u6d41\uff0c\u56fe\u7247\u6570\u636e\u4e3a base64\u3002",
-          heroNote: "\u6ce8\u610f\uff1acdn/gpt/codex \u7684 <code>/v1/images/generations/events</code> \u7531 Aiswing \u4ee3\u7406\u8f6c\u6210 Responses \u6d41\u5f0f\u751f\u56fe\u8bf7\u6c42\uff0c\u56e0\u6b64\u53ef\u76f4\u63a5\u7528\u672c\u6587\u6863\u7684\u8bf7\u6c42\u4f53\u3002",
+          heroNote: "\u6ce8\u610f\uff1acdn/gpt/codex \u7684 <code>/v1/responses</code> \u662f Responses \u6d41\u5f0f\u751f\u56fe\u8bf7\u6c42\uff0c\u56e0\u6b64\u53ef\u76f4\u63a5\u7528\u672c\u6587\u6863\u7684\u8bf7\u6c42\u4f53\u3002",
           textTitle: "\u6587\u751f\u56fe\uff1acurl \u793a\u4f8b",
           routeRecommend: "\u63a8\u8350 cdn \u7ebf\u8def",
           textNote: "\u6587\u751f\u56fe\u4e0d\u9700\u8981 <code>reference_images</code>\u30024K \u6a2a\u56fe\u7528 <code>3840x2160</code>\uff0c4K \u7ad6\u56fe\u7528 <code>2160x3840</code>\u3002",
@@ -241,7 +264,7 @@ while (true) {
           miniNote: "Replace <code>sk-your-key</code> in every example.",
           heroTitle: "Streaming Image API",
           heroDesc: "Call any route below directly. The API returns an SSE stream and image payloads are base64 strings.",
-          heroNote: "Note: <code>/v1/images/generations/events</code> on cdn/gpt/codex is proxied by Aiswing into a Responses streaming image request, so you can use this request body directly.",
+          heroNote: "Note: <code>/v1/responses</code> on cdn/gpt/codex is a direct Responses streaming image request, so you can use this request body directly.",
           textTitle: "Text to Image: curl Example",
           routeRecommend: "Recommended cdn route",
           textNote: "Text-to-image does not need <code>reference_images</code>. Use <code>3840x2160</code> for 4K landscape and <code>2160x3840</code> for 4K portrait.",
