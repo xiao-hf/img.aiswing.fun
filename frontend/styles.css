@@ -1407,3 +1407,9 @@ html[data-theme="dark"] .theme-toggle::before,
 html[lang="en"][data-theme="dark"] .theme-toggle::before {
   content: "\2600" !important;
 }
+
+
+/* hide-result-badge-v2026050940 */
+.result-badge {
+  display: none !important;
+}
