@@ -746,24 +746,26 @@ function renderSelectedTask() {
 
   let resultImage = null;
   if (task.status === "succeeded" && task.image_url) {
-    stage.innerHTML = `<div class="empty-inner"><strong>?????</strong><span>??????...</span></div>`;
+    stage.innerHTML = `<div class="empty-inner"><strong>${isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210" : "Image ready"}</strong><span>${isZh() ? "\u6b63\u5728\u52a0\u8f7d\u539f\u56fe..." : "Loading original..."}</span></div>`;
     resultImage = document.createElement("img");
-    resultImage.alt = task.prompt || "????";
+    resultImage.alt = task.prompt || (isZh() ? "\u751f\u6210\u7ed3\u679c" : "Generated image");
     if (task.preview_b64) resultImage.src = dataImageUrl(task.preview_b64, task.format);
-    setStatus(isZh() ? "????????????" : "Image ready, loading original", "loading");
+    setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u6b63\u5728\u52a0\u8f7d\u539f\u56fe" : "Image ready, loading original", "loading");
   } else if ((task.status === "running" || task.status === "pending") && task.preview_b64) {
     stage.innerHTML = "";
     const previewImage = document.createElement("img");
-    previewImage.alt = task.prompt || "????";
+    previewImage.alt = task.prompt || (isZh() ? "\u6d41\u5f0f\u9884\u89c8" : "Streaming preview");
     previewImage.src = dataImageUrl(task.preview_b64, task.format);
     stage.appendChild(previewImage);
-    setStatus(isZh() ? "????????" : "Streaming preview", "loading");
+    setStatus(isZh() ? "\u6b63\u5728\u6d41\u5f0f\u751f\u6210\u9884\u89c8" : "Streaming preview", "loading");
   } else if (task.status === "failed") {
-    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(task.error_message || "????")}</div>`;
-    setStatus(task.error_message || "????", "error");
+    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(task.error_message || (isZh() ? "\u751f\u6210\u5931\u8d25" : "Generation failed"))}</div>`;
+    setStatus(task.error_message || (isZh() ? "\u751f\u6210\u5931\u8d25" : "Generation failed"), "error");
   } else {
-    stage.innerHTML = `<div class="empty-inner"><strong>${task.status === "pending" ? "???" : "???"}</strong><span>${escapeHtml(task.progress || "??????")}</span></div>`;
-    setStatus(task.status === "pending" ? "????????????" : "??????", "loading");
+    const waitingTitle = task.status === "pending" ? (isZh() ? "\u6392\u961f\u4e2d" : "Queued") : (isZh() ? "\u751f\u6210\u4e2d" : "Generating");
+    const waitingDesc = task.progress || (isZh() ? "\u6b63\u5728\u5904\u7406\u4efb\u52a1" : "Processing task");
+    stage.innerHTML = `<div class="empty-inner"><strong>${waitingTitle}</strong><span>${escapeHtml(waitingDesc)}</span></div>`;
+    setStatus(task.status === "pending" ? (isZh() ? "\u4efb\u52a1\u5df2\u5165\u961f\uff0c\u7b49\u5f85\u540e\u7aef\u5904\u7406" : "Task queued") : (isZh() ? "\u540e\u7aef\u6b63\u5728\u751f\u6210" : "Backend is generating"), "loading");
   }
 
   const actions = document.createElement("div");
