@@ -1441,3 +1441,40 @@ html[lang="en"][data-theme="dark"] .theme-toggle::before {
 .result-badge {
   display: none !important;
 }
+
+
+/* fixed-sidebar-task-scroll-v2026050955 */
+.sidebar {
+  min-height: 0;
+  max-height: calc(100dvh - 32px);
+  overflow: hidden;
+}
+
+.sidebar-header,
+.sidebar-key-row,
+.sidebar-meta {
+  flex: 0 0 auto;
+}
+
+.task-list {
+  flex: 1 1 0;
+  min-height: 0;
+  max-height: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.task-main {
+  min-width: 0;
+}
+
+.task-meta,
+.task-status {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
