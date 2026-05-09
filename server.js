@@ -14,13 +14,14 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050956";
+const build = "2026050957";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
 const taskTtlHours = Number(process.env.TASK_TTL_HOURS || 48);
 const cleanupIntervalMs = Number(process.env.CLEANUP_INTERVAL_MINUTES || 10) * 60 * 1000;
 const keySecret = process.env.KEY_ENCRYPTION_SECRET || "change-this-secret-before-production";
+const imageAccessSecret = process.env.IMAGE_ACCESS_SECRET || keySecret;
 const workerConcurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 1));
 const upstreamPartialImagesRaw = Number(process.env.UPSTREAM_PARTIAL_IMAGES || 0);
 const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
@@ -198,9 +199,29 @@ function decryptText(value) {
   ]).toString("utf8");
 }
 
+function signImageAccess(task) {
+  const seed = `${task?.id || ""}:${task?.updated_at || ""}:${task?.completed_at || ""}`;
+  return crypto.createHmac("sha256", imageAccessSecret).update(seed).digest("base64url");
+}
+
+function isValidImageSignature(task, signature) {
+  if (!task || task.status !== "succeeded" || !signature) return false;
+  const expected = signImageAccess(task);
+  const expectedBuffer = Buffer.from(expected);
+  const actualBuffer = Buffer.from(String(signature));
+  return expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
+}
+
+function taskImageUrl(task) {
+  if (!task || task.status !== "succeeded") return "";
+  const ts = encodeURIComponent(String(task.updated_at || ""));
+  const sig = encodeURIComponent(signImageAccess(task));
+  return `/api/tasks/${encodeURIComponent(task.id)}/image?ts=${ts}&sig=${sig}`;
+}
+
 function safeTask(task) {
   if (!task) return null;
-  const imageUrl = task.status === "succeeded" ? `/api/tasks/${task.id}/image` : "";
+  const imageUrl = taskImageUrl(task);
   return {
     id: task.id,
     model: task.model,
@@ -1024,13 +1045,13 @@ async function handleTasksApi(req, res, requestUrl) {
   }
 
   const apiKey = requireBearer(req);
-  if (!apiKey) {
-    sendJson(res, 401, { error: { message: "Missing Authorization Bearer API Key" } });
-    return;
-  }
-  const apiKeyHash = hashApiKey(apiKey);
+  const apiKeyHash = apiKey ? hashApiKey(apiKey) : "";
 
   if (requestUrl.pathname === "/api/tasks" && req.method === "POST") {
+    if (!apiKey) {
+      sendJson(res, 401, { error: { message: "Missing Authorization Bearer API Key" } });
+      return;
+    }
     let body;
     try {
       body = await readBody(req);
@@ -1080,6 +1101,10 @@ async function handleTasksApi(req, res, requestUrl) {
   }
 
   if (requestUrl.pathname === "/api/tasks" && req.method === "GET") {
+    if (!apiKey) {
+      sendJson(res, 401, { error: { message: "Missing Authorization Bearer API Key" } });
+      return;
+    }
     const limit = Math.min(100, Math.max(1, Number(requestUrl.searchParams.get("limit") || 30)));
     const tasks = statements.listTasksByHash.all(apiKeyHash, limit).map(safeTask);
     sendJson(res, 200, { tasks });
@@ -1093,12 +1118,19 @@ async function handleTasksApi(req, res, requestUrl) {
   }
 
   const task = statements.getTask.get(taskMatch[1]);
-  if (!task || task.api_key_hash !== apiKeyHash) {
+  if (!task) {
     sendJson(res, 404, { error: { message: "Task not found" } });
     return;
   }
 
-  if (taskMatch[2] === "image" && req.method === "GET") {
+  const authorizedByKey = Boolean(apiKeyHash && task.api_key_hash === apiKeyHash);
+  const authorizedByImageSignature = isValidImageSignature(task, requestUrl.searchParams.get("sig") || "");
+
+  if (taskMatch[2] === "image" && (req.method === "GET" || req.method === "HEAD")) {
+    if (!authorizedByKey && !authorizedByImageSignature) {
+      sendJson(res, apiKey ? 404 : 401, { error: { message: apiKey ? "Task not found" : "Missing Authorization Bearer API Key" } });
+      return;
+    }
     if (task.status !== "succeeded") {
       sendJson(res, 409, { error: { message: "Task image is not ready" }, task: safeTask(task) });
       return;
@@ -1108,14 +1140,35 @@ async function handleTasksApi(req, res, requestUrl) {
       sendJson(res, 404, { error: { message: "Image file not found" } });
       return;
     }
+    const stat = fs.statSync(filePath);
     const ext = path.extname(filePath).toLowerCase();
     const contentType = mimeTypes[ext] || "application/octet-stream";
     res.writeHead(200, {
       "Content-Type": contentType,
+      "Content-Length": String(stat.size),
+      "Content-Disposition": `inline; filename="aiswing-${task.id}${ext || ".png"}"`,
       "Cache-Control": "private, max-age=3600",
       "Access-Control-Allow-Origin": "*",
+      "X-Content-Type-Options": "nosniff",
     });
-    fs.createReadStream(filePath).pipe(res);
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
+    const stream = fs.createReadStream(filePath);
+    stream.on("error", (error) => {
+      console.error("[image stream error]", { task_id: task.id, path: task.result_path, message: error?.message || String(error) });
+      res.destroy(error);
+    });
+    req.on("aborted", () => {
+      console.warn("[image stream aborted]", { task_id: task.id, bytes: stat.size });
+    });
+    stream.pipe(res);
+    return;
+  }
+
+  if (!authorizedByKey) {
+    sendJson(res, 404, { error: { message: "Task not found" } });
     return;
   }
 

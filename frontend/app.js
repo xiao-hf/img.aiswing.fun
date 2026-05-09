@@ -6,6 +6,7 @@ const LANG_KEY = "aiswing-image-studio-lang";
 const DRAFT_TASK_ID = "__draft__";
 const MAX_TASKS = 30;
 const POLL_INTERVAL_MS = 2500;
+const PREVIEW_TIMEOUT_MS = 120000;
 const STREAM_CDN_ENDPOINT = "https://cdn.aiswing.fun/v1/responses";
 
 const elements = {
@@ -57,6 +58,7 @@ const state = {
   currentImageUrl: "",
   currentFileName: "",
   currentObjectUrl: "",
+  currentImageNativeUrl: "",
   imageLoadToken: 0,
   pollingActive: false,
   pollingTimerId: null,
@@ -795,44 +797,118 @@ function resetCurrentImage() {
   state.currentObjectUrl = "";
   state.currentImageUrl = "";
   state.currentFileName = "";
+  state.currentImageNativeUrl = "";
 }
 
 async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
+  const imageUrl = buildImageUrl(task);
+  const fileName = `aiswing-${task.id}.${task.format || "png"}`;
+  if (!imageUrl) {
+    showPreviewError(stage, downloadButton, task, "Image URL is empty");
+    return;
+  }
+
+  resetCurrentImage();
+  state.currentImageNativeUrl = imageUrl;
+  state.currentImageUrl = imageUrl;
+  state.currentFileName = fileName;
+  downloadButton.disabled = false;
+
   try {
-    const response = await fetch(buildApiUrl(`${task.image_url}?t=${task.updated_at}`), {
-      headers: authHeaders(),
-    });
-    if (!response.ok) {
-      let message = `图片读取失败 HTTP ${response.status}`;
-      try {
-        const payload = await response.clone().json();
-        message = payload?.error?.message || payload?.message || message;
-      } catch {
-        // keep status code message
-      }
-      throw new Error(message);
-    }
-
-    const blob = await response.blob();
+    await preloadImageElement(img, imageUrl, PREVIEW_TIMEOUT_MS);
     if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-
-    resetCurrentImage();
-    const objectUrl = URL.createObjectURL(blob);
-    state.currentObjectUrl = objectUrl;
-    state.currentImageUrl = objectUrl;
-    state.currentFileName = `aiswing-${task.id}.${task.format || "png"}`;
-
-    img.src = objectUrl;
     stage.innerHTML = "";
     stage.appendChild(img);
-    downloadButton.disabled = false;
-    setStatus("图片已完成，结果保留 48 小时", "success");
-  } catch (error) {
+    setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u7ed3\u679c\u4fdd\u7559 48 \u5c0f\u65f6" : "Image ready, retained for 48 hours", "success");
+  } catch (directError) {
     if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
-    stage.innerHTML = `<div class="empty-inner error">${escapeHtml(error.message || "图片预览加载失败")}</div>`;
-    downloadButton.disabled = true;
-    setStatus(error.message || "图片预览加载失败", "error");
+    setStatus(isZh() ? "\u76f4\u8fde\u9884\u89c8\u5931\u8d25\uff0c\u6b63\u5728\u5c1d\u8bd5\u517c\u5bb9\u52a0\u8f7d" : "Direct preview failed, trying fallback", "loading");
+
+    try {
+      const controller = new AbortController();
+      const timeoutId = window.setTimeout(() => controller.abort(), PREVIEW_TIMEOUT_MS);
+      const response = await fetch(imageUrl, {
+        headers: authHeaders(),
+        signal: controller.signal,
+      });
+      window.clearTimeout(timeoutId);
+      if (!response.ok) {
+        let message = `Image read failed HTTP ${response.status}`;
+        try {
+          const payload = await response.clone().json();
+          message = payload?.error?.message || payload?.message || message;
+        } catch {
+          // keep status code message
+        }
+        throw new Error(message);
+      }
+
+      const blob = await response.blob();
+      if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
+
+      const objectUrl = URL.createObjectURL(blob);
+      state.currentObjectUrl = objectUrl;
+      state.currentImageUrl = objectUrl;
+      state.currentFileName = fileName;
+      img.src = objectUrl;
+      stage.innerHTML = "";
+      stage.appendChild(img);
+      downloadButton.disabled = false;
+      setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u7ed3\u679c\u4fdd\u7559 48 \u5c0f\u65f6" : "Image ready, retained for 48 hours", "success");
+    } catch (fallbackError) {
+      if (token !== state.imageLoadToken || state.selectedTaskId !== task.id) return;
+      showPreviewError(stage, downloadButton, task, fallbackError.message || directError.message || "Image preview failed");
+    }
   }
+}
+
+function buildImageUrl(task) {
+  if (!task?.image_url) return "";
+  const raw = String(task.image_url);
+  if (/^https?:\/\//i.test(raw)) return raw;
+  const separator = raw.includes("?") ? "&" : "?";
+  const cacheValue = encodeURIComponent(String(task.updated_at || Date.now()));
+  return buildApiUrl(`${raw}${separator}t=${cacheValue}`);
+}
+
+function preloadImageElement(img, url, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    const timerId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Image preview timeout"));
+    }, timeoutMs);
+    function cleanup() {
+      window.clearTimeout(timerId);
+      img.onload = null;
+      img.onerror = null;
+    }
+    img.onload = () => {
+      cleanup();
+      resolve();
+    };
+    img.onerror = () => {
+      cleanup();
+      reject(new Error("Image preview failed"));
+    };
+    img.src = url;
+  });
+}
+
+function showPreviewError(stage, downloadButton, task, message) {
+  const imageUrl = buildImageUrl(task);
+  stage.innerHTML = `
+    <div class="empty-inner error">
+      <strong>${escapeHtml(message || "Image preview failed")}</strong>
+      ${imageUrl ? `<span>${isZh() ? "\u56fe\u7247\u5df2\u751f\u6210\uff0c\u53ef\u5148\u70b9\u51fb\u4e0b\u8f7d\u67e5\u770b\u3002" : "The image is generated; use download or open original."}</span><a class="secondary small" href="${escapeHtml(imageUrl)}" target="_blank" rel="noopener">${isZh() ? "\u6253\u5f00\u539f\u56fe" : "Open original"}</a>` : ""}
+    </div>
+  `;
+  downloadButton.disabled = !imageUrl;
+  if (imageUrl) {
+    state.currentImageNativeUrl = imageUrl;
+    state.currentImageUrl = imageUrl;
+    state.currentFileName = `aiswing-${task.id}.${task.format || "png"}`;
+  }
+  setStatus(message || "Image preview failed", "error");
 }
 
 async function refreshFromServer(options = {}) {
@@ -1146,6 +1222,8 @@ function downloadCurrentImage() {
   const link = document.createElement("a");
   link.href = state.currentImageUrl;
   link.download = state.currentFileName || "aiswing-image.png";
+  link.target = state.currentImageUrl.startsWith("blob:") ? "" : "_blank";
+  link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
   link.remove();
