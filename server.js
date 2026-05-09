@@ -14,7 +14,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050960";
+const build = "2026050961";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -126,7 +126,7 @@ const statements = {
   `),
   getTask: db.prepare("SELECT * FROM tasks WHERE id = ?"),
   listTasksByHash: db.prepare(`
-    SELECT id, model, prompt, size, quality, format, reference_count, status, progress, error_message,
+    SELECT id, model, prompt, size, quality, format, reference_count, status, progress, result_path, error_message,
            created_at, started_at, completed_at, expires_at, updated_at
     FROM tasks
     WHERE api_key_hash = ?
@@ -216,7 +216,8 @@ function taskImageUrl(task) {
   if (!task || task.status !== "succeeded") return "";
   const ts = encodeURIComponent(String(task.updated_at || ""));
   const sig = encodeURIComponent(signImageAccess(task));
-  return `/api/tasks/${encodeURIComponent(task.id)}/image?ts=${ts}&sig=${sig}`;
+  const ext = encodeURIComponent(String(path.extname(task.result_path || "").replace(/^\./, "") || task.format || "png"));
+  return `/api/tasks/${encodeURIComponent(task.id)}/image.${ext}?ts=${ts}&sig=${sig}`;
 }
 
 function safeTask(task) {
@@ -1211,7 +1212,7 @@ async function handleTasksApi(req, res, requestUrl) {
     return;
   }
 
-  const taskMatch = requestUrl.pathname.match(/^\/api\/tasks\/([^/]+)(?:\/(image))?$/);
+  const taskMatch = requestUrl.pathname.match(/^\/api\/tasks\/([^/.]+)(?:\/(image)|\/image\.(png|jpe?g|webp))?$/);
   if (!taskMatch) {
     sendJson(res, 404, { error: { message: "Not Found" } });
     return;
@@ -1226,7 +1227,7 @@ async function handleTasksApi(req, res, requestUrl) {
   const authorizedByKey = Boolean(apiKeyHash && task.api_key_hash === apiKeyHash);
   const authorizedByImageSignature = isValidImageSignature(task, requestUrl.searchParams.get("sig") || "");
 
-  if (taskMatch[2] === "image" && (req.method === "GET" || req.method === "HEAD")) {
+  if ((taskMatch[2] === "image" || taskMatch[3]) && (req.method === "GET" || req.method === "HEAD")) {
     if (!authorizedByKey && !authorizedByImageSignature) {
       sendJson(res, apiKey ? 404 : 401, { error: { message: apiKey ? "Task not found" : "Missing Authorization Bearer API Key" } });
       return;
@@ -1246,8 +1247,8 @@ async function handleTasksApi(req, res, requestUrl) {
     res.writeHead(200, {
       "Content-Type": contentType,
       "Content-Length": String(stat.size),
-      "Content-Disposition": `inline; filename="aiswing-${task.id}${ext || ".png"}"`,
-      "Cache-Control": "private, max-age=3600",
+      "Content-Disposition": `attachment; filename="aiswing-${task.id}${ext || ".png"}"`,
+      "Cache-Control": "private, max-age=86400",
       "Access-Control-Allow-Origin": "*",
       "X-Content-Type-Options": "nosniff",
     });

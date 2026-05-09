@@ -1216,12 +1216,36 @@ function isZh() {
   return (document.documentElement.getAttribute("lang") || "zh") !== "en";
 }
 
-function downloadCurrentImage() {
-  if (!state.currentImageUrl) return;
+async function downloadCurrentImage() {
+  const sourceUrl = state.currentImageNativeUrl || state.currentImageUrl;
+  if (!sourceUrl) return;
+  const fileName = state.currentFileName || "aiswing-image.png";
+
+  if (sourceUrl.startsWith("blob:")) {
+    triggerDownload(sourceUrl, fileName);
+    return;
+  }
+
+  try {
+    setStatus(isZh() ? "\u6b63\u5728\u4e0b\u8f7d\u539f\u56fe" : "Downloading image", "loading");
+    const response = await fetchWithTimeout(sourceUrl, { headers: authHeaders() }, PREVIEW_TIMEOUT_MS);
+    if (!response.ok) throw new Error(`Download failed HTTP ${response.status}`);
+    const blob = await response.blob();
+    if (!blob.type.startsWith("image/")) throw new Error(`Download returned ${blob.type || "non-image data"}`);
+    const objectUrl = URL.createObjectURL(blob);
+    triggerDownload(objectUrl, fileName);
+    window.setTimeout(() => URL.revokeObjectURL(objectUrl), 30000);
+    setStatus(isZh() ? "\u4e0b\u8f7d\u5df2\u5f00\u59cb" : "Download started", "success");
+  } catch (error) {
+    triggerDownload(sourceUrl, fileName);
+    setStatus(error.message || "Download failed", "error");
+  }
+}
+
+function triggerDownload(url, fileName) {
   const link = document.createElement("a");
-  link.href = state.currentImageUrl;
-  link.download = state.currentFileName || "aiswing-image.png";
-  link.target = state.currentImageUrl.startsWith("blob:") ? "" : "_blank";
+  link.href = url;
+  link.download = fileName || "aiswing-image.png";
   link.rel = "noopener";
   document.body.appendChild(link);
   link.click();
