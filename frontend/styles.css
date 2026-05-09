@@ -288,6 +288,34 @@ h1 { margin-bottom: 0; font-size: clamp(24px, 2vw, 36px); font-weight: 600; lett
   padding-top: 12px;
 }
 
+.api-key-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 8px;
+}
+
+.api-key-row input {
+  flex: 1;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--panel);
+  color: var(--text);
+  font-size: 13px;
+  transition: border-color 0.15s ease;
+}
+
+.api-key-row input:focus {
+  outline: none;
+  border-color: var(--text);
+}
+
+.api-key-row input::placeholder {
+  color: var(--muted);
+}
+
 .reference-strip {
   display: flex;
   gap: 8px;
