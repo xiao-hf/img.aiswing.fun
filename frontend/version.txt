@@ -1,3 +1,1 @@
-img.aiswing.fun frontend build 2026050715
-Static workbench UI with API-key-scoped async tasks, reference image upload, and 48h cleanup.
-
+img.aiswing.fun frontend build 2026050939

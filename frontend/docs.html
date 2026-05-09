@@ -3,55 +3,60 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>&#27969;&#24335;&#29983;&#22270; API &#25991;&#26723;</title>
-    <link rel="stylesheet" href="./styles.css?v=2026050932" />
+    <title data-i18n="title">Streaming Image API Docs</title>
+    <link rel="stylesheet" href="./styles.css?v=2026050939" />
     <style>html, body { width: 100%; height: 100%; overflow: hidden; }</style>
     <script>
-      // 同步主题
       const THEME_KEY = "aiswing-image-studio-theme";
+      const LANG_KEY = "aiswing-image-studio-lang";
       const savedTheme = localStorage.getItem(THEME_KEY) || "light";
+      const queryLang = new URLSearchParams(location.search).get("lang");
+      const savedLang = queryLang || localStorage.getItem(LANG_KEY) || "zh";
       document.documentElement.setAttribute("data-theme", savedTheme);
+      const activeLang = savedLang === "en" ? "en" : "zh";
+      document.documentElement.setAttribute("lang", activeLang);
+      localStorage.setItem(LANG_KEY, activeLang);
     </script>
   </head>
   <body class="docs-page">
     <main class="api-doc-shell split-doc-shell">
-      <aside class="api-doc-nav" aria-label="API &#25991;&#26723;&#30446;&#24405;">
-        <a class="docs-back-button" href="./index.html">&larr; &#36820;&#22238;&#29983;&#22270;&#39029;&#38754;</a>
+      <aside class="api-doc-nav" aria-label="API docs navigation">
+        <a class="docs-back-button" data-i18n="back" href="./index.html">Back</a>
         <p class="eyebrow">Aiswing Image API</p>
-        <h1>API &#25991;&#26723;</h1>
+        <h1 data-i18n="navTitle">API Docs</h1>
         <nav class="doc-menu">
-          <a href="#overview"><span>&#27010;&#35272;</span><small>&#32447;&#36335;&#19982;&#37492;&#26435;</small></a>
-          <a href="#text-to-image"><span>&#25991;&#29983;&#22270;</span><small>prompt &#30452;&#25509;&#29983;&#22270;</small></a>
-          <a href="#image-to-image"><span>&#22270;&#29983;&#22270;</span><small>&#25658;&#24102;&#21442;&#32771;&#22270;</small></a>
-          <a href="#routes"><span>&#19977;&#26465;&#32447;&#36335;</span><small>cdn / gpt / codex</small></a>
-          <a href="#params"><span>&#21442;&#25968;&#35828;&#26126;</span><small>model / size / quality</small></a>
-          <a href="#stream"><span>SSE &#36820;&#22238;</span><small>&#39044;&#35272;&#22270;&#21644;&#26368;&#32456;&#22270;</small></a>
-          <a href="#js-example"><span>JS &#31034;&#20363;</span><small>&#27969;&#24335;&#35835;&#21462;</small></a>
+          <a href="#overview"><span data-i18n="menuOverview">Overview</span><small data-i18n="menuOverviewSub">Routes and auth</small></a>
+          <a href="#text-to-image"><span data-i18n="menuText">Text to Image</span><small data-i18n="menuTextSub">Generate from prompt</small></a>
+          <a href="#image-to-image"><span data-i18n="menuImage">Image to Image</span><small data-i18n="menuImageSub">With references</small></a>
+          <a href="#routes"><span data-i18n="menuRoutes">Routes</span><small>cdn / gpt / codex</small></a>
+          <a href="#params"><span data-i18n="menuParams">Parameters</span><small>model / size / quality</small></a>
+          <a href="#stream"><span data-i18n="menuStream">SSE</span><small data-i18n="menuStreamSub">Preview and final</small></a>
+          <a href="#js-example"><span data-i18n="menuJs">JS Example</span><small data-i18n="menuJsSub">Stream reader</small></a>
         </nav>
-        <div class="doc-mini-note">&#25152;&#26377;&#31034;&#20363;&#21482;&#38656;&#26367;&#25442; <code>sk-your-key</code>&#12290;</div>
+        <div class="doc-mini-note" data-i18n="miniNote">Replace <code>sk-your-key</code>.</div>
       </aside>
 
       <section class="api-doc-content">
         <section class="api-doc-hero api-card" id="overview">
           <p class="eyebrow">Overview</p>
-          <h1>&#27969;&#24335;&#29983;&#22270; API</h1>
-          <p>&#30452;&#25509;&#35831;&#27714;&#19979;&#38754;&#20219;&#24847;&#19968;&#26465;&#32447;&#36335;&#12290;&#25509;&#21475;&#36820;&#22238; SSE &#27969;&#65292;&#22270;&#29255;&#25968;&#25454;&#20026; base64&#12290;</p>
+          <h1 data-i18n="heroTitle">Streaming Image API</h1>
+          <p data-i18n="heroDesc">Call any route below directly. The API returns an SSE stream.</p>
           <div class="doc-kv-grid">
             <div><strong>Method</strong><code>POST</code></div>
             <div><strong>Path</strong><code>/v1/images/generations/events</code></div>
             <div><strong>Auth</strong><code>Authorization: Bearer sk-your-key</code></div>
             <div><strong>Accept</strong><code>text/event-stream</code></div>
           </div>
-          <p class="doc-note">&#27880;&#24847;&#65306;cdn/gpt/codex &#30340; <code>/v1/images/generations/events</code> &#30001; Aiswing &#20195;&#29702;&#36716;&#25104; Responses &#27969;&#24335;&#29983;&#22270;&#35831;&#27714;&#65292;&#22240;&#27492;&#21487;&#30452;&#25509;&#29992;&#26412;&#25991;&#26723;&#30340;&#35831;&#27714;&#20307;&#12290;</p>
+          <p class="doc-note" data-i18n="heroNote">Aiswing proxies this endpoint to Responses streaming image generation.</p>
         </section>
 
         <section class="api-card primary-doc-card" id="text-to-image">
           <div class="doc-section-head">
             <div>
               <p class="eyebrow">Text to Image</p>
-              <h2>&#25991;&#29983;&#22270;&#65306;curl &#31034;&#20363;</h2>
+              <h2 data-i18n="textTitle">Text to Image: curl Example</h2>
             </div>
-            <span class="route-pill">&#25512;&#33616; cdn &#32447;&#36335;</span>
+            <span class="route-pill" data-i18n="routeRecommend">Recommended cdn route</span>
           </div>
           <pre><code>curl --location 'https://cdn.aiswing.fun/v1/images/generations/events' \
   --header 'Authorization: Bearer sk-your-key' \
@@ -64,14 +69,14 @@
     "quality": "high",
     "format": "png"
   }'</code></pre>
-          <p class="doc-note">&#25991;&#29983;&#22270;&#19981;&#38656;&#35201; <code>reference_images</code>&#12290;4K &#27178;&#22270;&#29992; <code>3840x2160</code>&#65292;4K &#31446;&#22270;&#29992; <code>2160x3840</code>&#12290;</p>
+          <p class="doc-note" data-i18n="textNote">Use 3840x2160 for 4K landscape and 2160x3840 for 4K portrait.</p>
         </section>
 
         <section class="api-card" id="image-to-image">
           <div class="doc-section-head">
             <div>
               <p class="eyebrow">Image to Image</p>
-              <h2>&#22270;&#29983;&#22270;&#65306;&#25658;&#24102;&#21442;&#32771;&#22270;</h2>
+              <h2 data-i18n="imageTitle">Image to Image: With Reference Images</h2>
             </div>
             <span class="route-pill">reference_images</span>
           </div>
@@ -89,41 +94,41 @@
       "data:image/png;base64,iVBORw0KGgoAAA..."
     ]
   }'</code></pre>
-          <p class="doc-note">&#21442;&#32771;&#22270;&#25512;&#33616;&#20351;&#29992; <code>data:image/png;base64,...</code>&#12290;&#27983;&#35272;&#22120;&#20013;&#21487;&#29992; <code>FileReader.readAsDataURL(file)</code> &#36716;&#25442;&#26412;&#22320;&#22270;&#29255;&#12290;</p>
+          <p class="doc-note" data-i18n="imageNote">Use data:image/png;base64,... for reference images.</p>
         </section>
 
         <section class="api-card" id="routes">
-          <h2>&#19977;&#26465;&#32447;&#36335;</h2>
+          <h2 data-i18n="routesTitle">Three Routes</h2>
           <div class="route-grid">
-            <div><strong>cdn</strong><code>https://cdn.aiswing.fun/v1/images/generations/events</code><span>&#40664;&#35748;&#25512;&#33616;&#32447;&#36335;</span></div>
-            <div><strong>gpt</strong><code>https://gpt.aiswing.fun/v1/images/generations/events</code><span>&#22791;&#29992;&#32447;&#36335;</span></div>
-            <div><strong>codex</strong><code>https://codex.aiswing.fun/v1/images/generations/events</code><span>&#22791;&#29992;&#32447;&#36335;</span></div>
+            <div><strong>cdn</strong><code>https://cdn.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeDefault">Default recommended route</span></div>
+            <div><strong>gpt</strong><code>https://gpt.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeBackup">Backup route</span></div>
+            <div><strong>codex</strong><code>https://codex.aiswing.fun/v1/images/generations/events</code><span data-i18n="routeBackup">Backup route</span></div>
           </div>
         </section>
 
         <section class="api-card" id="params">
-          <h2>&#35831;&#27714;&#21442;&#25968;&#35828;&#26126;</h2>
+          <h2 data-i18n="paramsTitle">Request Parameters</h2>
           <div class="clean-param-list">
-            <div><code>model</code><strong>&#27169;&#22411;</strong><p>&#25512;&#33616; <code>gpt-image-2</code>&#12290;</p></div>
-            <div><code>prompt</code><strong>&#25552;&#31034;&#35789;</strong><p>&#24517;&#22635;&#12290;&#25551;&#36848;&#20027;&#20307;&#12289;&#39118;&#26684;&#12289;&#26500;&#22270;&#12289;&#20809;&#32447;&#12289;&#39068;&#33394;&#65292;&#20197;&#21450;&#19981;&#35201;&#20986;&#29616;&#30340;&#25991;&#23383;&#25110;&#27700;&#21360;&#12290;</p></div>
-            <div><code>size</code><strong>&#20998;&#36776;&#29575;</strong><p>&#25903;&#25345; <code>1024x1024</code>&#12289;<code>1536x1024</code>&#12289;<code>1024x1536</code>&#12289;<code>3840x2160</code>&#12289;<code>2160x3840</code>&#12289;<code>2880x2880</code>&#12289;<code>auto</code>&#12290;</p></div>
-            <div><code>quality</code><strong>&#36136;&#37327;</strong><p>&#21487;&#36873; <code>auto</code>&#12289;<code>low</code>&#12289;<code>medium</code>&#12289;<code>high</code>&#12290;4K &#25110;&#27491;&#24335;&#20986;&#22270;&#24314;&#35758; <code>high</code>&#12290;</p></div>
-            <div><code>format</code><strong>&#36755;&#20986;&#26684;&#24335;</strong><p>&#21487;&#36873; <code>png</code>&#12289;<code>jpeg</code>&#12289;<code>webp</code>&#12290;</p></div>
-            <div><code>reference_images</code><strong>&#21442;&#32771;&#22270;</strong><p>&#21487;&#36873;&#25968;&#32452;&#12290;&#19981;&#20256;&#23601;&#26159;&#25991;&#29983;&#22270;&#65307;&#20256;&#20837;&#21518;&#23601;&#26159;&#22270;&#29983;&#22270;&#12290;&#25903;&#25345; base64 data URL &#25110;&#20844;&#32593;&#22270;&#29255; URL&#12290;</p></div>
+            <div><code>model</code><strong data-i18n="paramModelName">Model</strong><p data-i18n="paramModelDesc">Recommended: <code>gpt-image-2</code>.</p></div>
+            <div><code>prompt</code><strong data-i18n="paramPromptName">Prompt</strong><p data-i18n="paramPromptDesc">Required. Describe subject, style, composition, lighting, colors, and unwanted text or watermark.</p></div>
+            <div><code>size</code><strong data-i18n="paramSizeName">Resolution</strong><p data-i18n="paramSizeDesc">Supports common sizes, 4K sizes, and auto.</p></div>
+            <div><code>quality</code><strong data-i18n="paramQualityName">Quality</strong><p data-i18n="paramQualityDesc">Optional: auto, low, medium, high.</p></div>
+            <div><code>format</code><strong data-i18n="paramFormatName">Output Format</strong><p data-i18n="paramFormatDesc">Optional: png, jpeg, webp.</p></div>
+            <div><code>reference_images</code><strong data-i18n="paramRefName">Reference Images</strong><p data-i18n="paramRefDesc">Optional array for image-to-image.</p></div>
           </div>
         </section>
 
         <section class="api-card" id="stream">
-          <h2>SSE &#27969;&#24335;&#36820;&#22238;</h2>
+          <h2 data-i18n="streamTitle">SSE Streaming Events</h2>
           <div class="clean-param-list compact-list">
-            <div><code>response.image_generation_call.partial_image</code><strong>&#39044;&#35272;&#22270;</strong><p>&#29983;&#25104;&#36807;&#31243;&#20013;&#30340;&#20013;&#38388;&#22270;&#65292;&#35835;&#21462; <code>partial_image_b64</code>&#12290;</p></div>
-            <div><code>response.completed</code><strong>&#26368;&#32456;&#22270;</strong><p>&#23436;&#25104;&#20107;&#20214;&#12290;&#26368;&#32456;&#22270;&#36890;&#24120;&#22312; <code>response.output[].result</code>&#12290;</p></div>
-            <div><code>[DONE]</code><strong>&#32467;&#26463;</strong><p>SSE &#27969;&#32467;&#26463;&#26631;&#35760;&#12290;</p></div>
+            <div><code>response.image_generation_call.partial_image</code><strong data-i18n="streamPartialName">Preview image</strong><p data-i18n="streamPartialDesc">Read partial_image_b64.</p></div>
+            <div><code>response.completed</code><strong data-i18n="streamFinalName">Final image</strong><p data-i18n="streamFinalDesc">Usually in response.output[].result.</p></div>
+            <div><code>[DONE]</code><strong data-i18n="streamDoneName">Done</strong><p data-i18n="streamDoneDesc">SSE stream termination marker.</p></div>
           </div>
         </section>
 
         <section class="api-card" id="js-example">
-          <h2>JavaScript &#27969;&#24335;&#35835;&#21462;&#31034;&#20363;</h2>
+          <h2 data-i18n="jsTitle">JavaScript Streaming Example</h2>
           <pre><code>const endpoint = "https://cdn.aiswing.fun/v1/images/generations/events";
 const response = await fetch(endpoint, {
   method: "POST",
@@ -164,5 +169,124 @@ while (true) {
         </section>
       </section>
     </main>
+
+    <script>
+      const i18n = {
+        zh: {
+          title: "\u6d41\u5f0f\u751f\u56fe API \u6587\u6863",
+          back: "\u2190 \u8fd4\u56de\u751f\u56fe\u9875\u9762",
+          navTitle: "API \u6587\u6863",
+          menuOverview: "\u6982\u89c8",
+          menuOverviewSub: "\u7ebf\u8def\u4e0e\u9274\u6743",
+          menuText: "\u6587\u751f\u56fe",
+          menuTextSub: "prompt \u76f4\u63a5\u751f\u56fe",
+          menuImage: "\u56fe\u751f\u56fe",
+          menuImageSub: "\u643a\u5e26\u53c2\u8003\u56fe",
+          menuRoutes: "\u4e09\u6761\u7ebf\u8def",
+          menuParams: "\u53c2\u6570\u8bf4\u660e",
+          menuStream: "SSE \u8fd4\u56de",
+          menuStreamSub: "\u9884\u89c8\u56fe\u548c\u6700\u7ec8\u56fe",
+          menuJs: "JS \u793a\u4f8b",
+          menuJsSub: "\u6d41\u5f0f\u8bfb\u53d6",
+          miniNote: "\u6240\u6709\u793a\u4f8b\u53ea\u9700\u8981\u66ff\u6362 <code>sk-your-key</code>\u3002",
+          heroTitle: "\u6d41\u5f0f\u751f\u56fe API",
+          heroDesc: "\u76f4\u63a5\u8bf7\u6c42\u4e0b\u9762\u4efb\u610f\u4e00\u6761\u7ebf\u8def\u3002\u63a5\u53e3\u8fd4\u56de SSE \u6d41\uff0c\u56fe\u7247\u6570\u636e\u4e3a base64\u3002",
+          heroNote: "\u6ce8\u610f\uff1acdn/gpt/codex \u7684 <code>/v1/images/generations/events</code> \u7531 Aiswing \u4ee3\u7406\u8f6c\u6210 Responses \u6d41\u5f0f\u751f\u56fe\u8bf7\u6c42\uff0c\u56e0\u6b64\u53ef\u76f4\u63a5\u7528\u672c\u6587\u6863\u7684\u8bf7\u6c42\u4f53\u3002",
+          textTitle: "\u6587\u751f\u56fe\uff1acurl \u793a\u4f8b",
+          routeRecommend: "\u63a8\u8350 cdn \u7ebf\u8def",
+          textNote: "\u6587\u751f\u56fe\u4e0d\u9700\u8981 <code>reference_images</code>\u30024K \u6a2a\u56fe\u7528 <code>3840x2160</code>\uff0c4K \u7ad6\u56fe\u7528 <code>2160x3840</code>\u3002",
+          imageTitle: "\u56fe\u751f\u56fe\uff1a\u643a\u5e26\u53c2\u8003\u56fe",
+          imageNote: "\u53c2\u8003\u56fe\u63a8\u8350\u4f7f\u7528 <code>data:image/png;base64,...</code>\u3002\u6d4f\u89c8\u5668\u4e2d\u53ef\u7528 <code>FileReader.readAsDataURL(file)</code> \u8f6c\u6362\u672c\u5730\u56fe\u50cf\u3002",
+          routesTitle: "\u4e09\u6761\u7ebf\u8def",
+          routeDefault: "\u9ed8\u8ba4\u63a8\u8350\u7ebf\u8def",
+          routeBackup: "\u5907\u7528\u7ebf\u8def",
+          paramsTitle: "\u8bf7\u6c42\u53c2\u6570\u8bf4\u660e",
+          paramModelName: "\u6a21\u578b",
+          paramModelDesc: "\u63a8\u8350 <code>gpt-image-2</code>\u3002",
+          paramPromptName: "\u63d0\u793a\u8bcd",
+          paramPromptDesc: "\u5fc5\u586b\u3002\u63cf\u8ff0\u4e3b\u4f53\u3001\u98ce\u683c\u3001\u6784\u56fe\u3001\u5149\u7ebf\u3001\u989c\u8272\uff0c\u4ee5\u53ca\u4e0d\u8981\u51fa\u73b0\u7684\u6587\u5b57\u6216\u6c34\u5370\u3002",
+          paramSizeName: "\u5206\u8fa8\u7387",
+          paramSizeDesc: "\u652f\u6301 <code>1024x1024</code>\u3001<code>1536x1024</code>\u3001<code>1024x1536</code>\u3001<code>3840x2160</code>\u3001<code>2160x3840</code>\u3001<code>2880x2880</code>\u3001<code>auto</code>\u3002",
+          paramQualityName: "\u8d28\u91cf",
+          paramQualityDesc: "\u53ef\u9009 <code>auto</code>\u3001<code>low</code>\u3001<code>medium</code>\u3001<code>high</code>\u30024K \u6216\u6b63\u5f0f\u51fa\u56fe\u5efa\u8bae <code>high</code>\u3002",
+          paramFormatName: "\u8f93\u51fa\u683c\u5f0f",
+          paramFormatDesc: "\u53ef\u9009 <code>png</code>\u3001<code>jpeg</code>\u3001<code>webp</code>\u3002",
+          paramRefName: "\u53c2\u8003\u56fe",
+          paramRefDesc: "\u53ef\u9009\u6570\u7ec4\u3002\u4e0d\u4f20\u5c31\u662f\u6587\u751f\u56fe\uff1b\u4f20\u5165\u540e\u5c31\u662f\u56fe\u751f\u56fe\u3002\u652f\u6301 base64 data URL \u6216\u516c\u7f51\u56fe\u7247 URL\u3002",
+          streamTitle: "SSE \u6d41\u5f0f\u8fd4\u56de",
+          streamPartialName: "\u9884\u89c8\u56fe",
+          streamPartialDesc: "\u751f\u6210\u8fc7\u7a0b\u4e2d\u7684\u4e2d\u95f4\u56fe\uff0c\u8bfb\u53d6 <code>partial_image_b64</code>\u3002",
+          streamFinalName: "\u6700\u7ec8\u56fe",
+          streamFinalDesc: "\u5b8c\u6210\u4e8b\u4ef6\u3002\u6700\u7ec8\u56fe\u901a\u5e38\u5728 <code>response.output[].result</code>\u3002",
+          streamDoneName: "\u7ed3\u675f",
+          streamDoneDesc: "SSE \u6d41\u7ed3\u675f\u6807\u8bb0\u3002",
+          jsTitle: "JavaScript \u6d41\u5f0f\u8bfb\u53d6\u793a\u4f8b"
+        },
+        en: {
+          title: "Streaming Image API Docs",
+          back: "\u2190 Back to Studio",
+          navTitle: "API Docs",
+          menuOverview: "Overview",
+          menuOverviewSub: "Routes and auth",
+          menuText: "Text to Image",
+          menuTextSub: "Generate from prompt",
+          menuImage: "Image to Image",
+          menuImageSub: "With references",
+          menuRoutes: "Three Routes",
+          menuParams: "Parameters",
+          menuStream: "SSE Events",
+          menuStreamSub: "Preview and final image",
+          menuJs: "JS Example",
+          menuJsSub: "Read the stream",
+          miniNote: "Replace <code>sk-your-key</code> in every example.",
+          heroTitle: "Streaming Image API",
+          heroDesc: "Call any route below directly. The API returns an SSE stream and image payloads are base64 strings.",
+          heroNote: "Note: <code>/v1/images/generations/events</code> on cdn/gpt/codex is proxied by Aiswing into a Responses streaming image request, so you can use this request body directly.",
+          textTitle: "Text to Image: curl Example",
+          routeRecommend: "Recommended cdn route",
+          textNote: "Text-to-image does not need <code>reference_images</code>. Use <code>3840x2160</code> for 4K landscape and <code>2160x3840</code> for 4K portrait.",
+          imageTitle: "Image to Image: With Reference Images",
+          imageNote: "Use <code>data:image/png;base64,...</code> for reference images. In browsers, convert local images with <code>FileReader.readAsDataURL(file)</code>.",
+          routesTitle: "Three Routes",
+          routeDefault: "Default recommended route",
+          routeBackup: "Backup route",
+          paramsTitle: "Request Parameters",
+          paramModelName: "Model",
+          paramModelDesc: "Recommended: <code>gpt-image-2</code>.",
+          paramPromptName: "Prompt",
+          paramPromptDesc: "Required. Describe subject, style, composition, lighting, colors, and unwanted text or watermark.",
+          paramSizeName: "Resolution",
+          paramSizeDesc: "Supports <code>1024x1024</code>, <code>1536x1024</code>, <code>1024x1536</code>, <code>3840x2160</code>, <code>2160x3840</code>, <code>2880x2880</code>, and <code>auto</code>.",
+          paramQualityName: "Quality",
+          paramQualityDesc: "Optional: <code>auto</code>, <code>low</code>, <code>medium</code>, <code>high</code>. Use <code>high</code> for 4K or final outputs.",
+          paramFormatName: "Output Format",
+          paramFormatDesc: "Optional: <code>png</code>, <code>jpeg</code>, or <code>webp</code>.",
+          paramRefName: "Reference Images",
+          paramRefDesc: "Optional array. Omit it for text-to-image; provide it for image-to-image. Supports base64 data URLs or public image URLs.",
+          streamTitle: "SSE Streaming Events",
+          streamPartialName: "Preview image",
+          streamPartialDesc: "Intermediate image during generation. Read <code>partial_image_b64</code>.",
+          streamFinalName: "Final image",
+          streamFinalDesc: "Completion event. The final image is usually in <code>response.output[].result</code>.",
+          streamDoneName: "Done",
+          streamDoneDesc: "SSE stream termination marker.",
+          jsTitle: "JavaScript Streaming Example"
+        }
+      };
+
+      function applyLang() {
+        const lang = document.documentElement.getAttribute("lang") || "zh";
+        const dict = i18n[lang] || {};
+        document.querySelectorAll("[data-i18n]").forEach((node) => {
+          const key = node.dataset.i18n;
+          if (!dict[key]) return;
+          node.innerHTML = dict[key];
+        });
+        if (dict.title) document.title = dict.title;
+        const back = document.querySelector(".docs-back-button");
+        if (back) back.href = lang === "en" ? "./index.html?lang=en" : "./index.html";
+      }
+      applyLang();
+    </script>
   </body>
 </html>

@@ -10,6 +10,7 @@ const POLL_INTERVAL_MS = 2500;
 const elements = {
   apiKeyInput: document.getElementById("apiKeyInput"),
   apiKeyButton: document.getElementById("apiKeyButton"),
+  docsLink: document.getElementById("docsLink"),
   apiKeyModal: document.getElementById("apiKeyModal"),
   apiKeyModalInput: document.getElementById("apiKeyModalInput"),
   apiKeySaveButton: document.getElementById("apiKeySaveButton"),
@@ -101,8 +102,12 @@ function toggleTheme() {
 }
 
 function initLang() {
-  const savedLang = localStorage.getItem(LANG_KEY) || "zh";
-  document.documentElement.setAttribute("lang", savedLang);
+  const queryLang = new URLSearchParams(window.location.search).get("lang");
+  const savedLang = queryLang || localStorage.getItem(LANG_KEY) || "zh";
+  const lang = savedLang === "en" ? "en" : "zh";
+  document.documentElement.setAttribute("lang", lang);
+  localStorage.setItem(LANG_KEY, lang);
+  updateDocsLink(lang);
 }
 
 function toggleLang() {
@@ -111,6 +116,7 @@ function toggleLang() {
   document.documentElement.setAttribute("lang", newLang);
   localStorage.setItem(LANG_KEY, newLang);
   updateLangTexts();
+  updateDocsLink(newLang);
 }
 
 function updateLangTexts() {
@@ -179,11 +185,11 @@ function updateLangTexts() {
   const docButton = document.querySelector('.doc-button');
   if (docButton) {
     docButton.textContent = t.apiDoc;
-    docButton.href = lang === "en" ? "./docs.html?lang=en" : "./docs.html";
+    updateDocsLink(lang);
   }
 
   const hasKey = Boolean(elements.apiKeyInput.value.trim());
-  elements.apiKeyButton.textContent = hasKey ? t.apiKeyOk : t.fillApiKey;
+  if (elements.apiKeyButton) elements.apiKeyButton.textContent = hasKey ? t.apiKeyOk : t.fillApiKey;
 
   if (elements.copyPromptButton) {
     elements.copyPromptButton.textContent = t.copyPrompt;
@@ -201,6 +207,14 @@ function updateLangTexts() {
   // 更新任务列表中的文本
   renderTaskList();
   refreshTaskCounters();
+}
+
+function updateDocsLink(lang = document.documentElement.getAttribute("lang") || "zh") {
+  const docButton = elements.docsLink || document.querySelector(".doc-button");
+  if (!docButton) return;
+  const url = new URL("./docs.html", window.location.href);
+  if (lang === "en") url.searchParams.set("lang", "en");
+  docButton.href = `${url.pathname.split("/").pop()}${url.search}${url.hash}`;
 }
 
 function bindEvents() {
