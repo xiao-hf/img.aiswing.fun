@@ -14,7 +14,7 @@ const host = process.env.HOST || "0.0.0.0";
 const port = Number(process.env.PORT || 3000);
 const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/, "");
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050958";
+const build = "2026050959";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -679,7 +679,7 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
     return readImageB64FromNodeStream(upstreamResponse, onProgress, endpoint);
   }
 
-  const endpoint = "/v1/images/generations/events";
+  const endpoint = "/v1/images/generations";
   const streamPayload = imagePayloadToImageEndpointPayload(payload);
   const target = new URL(endpoint, upstream);
   const upstreamResponse = await postJsonStream(target, streamPayload, apiKey);
@@ -1457,5 +1457,5 @@ const server = http.createServer((req, res) => {
 
 server.listen(port, host, () => {
   console.log(`Aiswing app listening on http://${host}:${port}`);
-  console.log(`Compat /v1/images/* -> ${upstream}/v1/images/generations/events stream-first`);
+  console.log(`Compat /v1/images/* -> ${upstream}/v1/images/generations image-endpoint-first`);
 });
