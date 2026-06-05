@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050966";
+const build = "2026050967";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -51,45 +51,50 @@ let updateState = {
 let nextFourKAllowedAt = 0;
 
 function loadSqliteDatabase() {
+  if (String(process.env.SQLITE_DRIVER || "node").toLowerCase() !== "better-sqlite3") {
+    try {
+      return loadNodeSqliteCompat();
+    } catch (error) {
+      if (process.env.SQLITE_DRIVER) throw error;
+    }
+  }
   try {
     return require("better-sqlite3");
   } catch (error) {
     try {
-      const { DatabaseSync } = require("node:sqlite");
-      return class NodeSqliteCompat {
-        constructor(filename) {
-          this.db = new DatabaseSync(filename);
-        }
-        pragma(sql) {
-          return this.db.exec(`PRAGMA ${sql}`);
-        }
-        exec(sql) {
-          return this.db.exec(sql);
-        }
-        prepare(sql) {
-          const statement = this.db.prepare(sql);
-          const normalizeArgs = (args) => {
-            if (args.length === 0) return [];
-            if (args.length === 1) return [args[0]];
-            return args;
-          };
-          return {
-            get: (...args) => {
-              return statement.get(...normalizeArgs(args));
-            },
-            all: (...args) => {
-              return statement.all(...normalizeArgs(args));
-            },
-            run: (...args) => {
-              return statement.run(...normalizeArgs(args));
-            },
-          };
-        }
-      };
+      return loadNodeSqliteCompat();
     } catch {
       throw error;
     }
   }
+}
+
+function loadNodeSqliteCompat() {
+  const { DatabaseSync } = require("node:sqlite");
+  return class NodeSqliteCompat {
+    constructor(filename) {
+      this.db = new DatabaseSync(filename);
+    }
+    pragma(sql) {
+      return this.db.exec(`PRAGMA ${sql}`);
+    }
+    exec(sql) {
+      return this.db.exec(sql);
+    }
+    prepare(sql) {
+      const statement = this.db.prepare(sql);
+      const normalizeArgs = (args) => {
+        if (args.length === 0) return [];
+        if (args.length === 1) return [args[0]];
+        return args;
+      };
+      return {
+        get: (...args) => statement.get(...normalizeArgs(args)),
+        all: (...args) => statement.all(...normalizeArgs(args)),
+        run: (...args) => statement.run(...normalizeArgs(args)),
+      };
+    }
+  };
 }
 
 fs.mkdirSync(imageDir, { recursive: true });

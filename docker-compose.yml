@@ -19,6 +19,7 @@ services:
       - MAX_BODY_BYTES=${MAX_BODY_BYTES:-62914560}
       - DATA_DIR=${DATA_DIR:-/app/data}
       - SQLITE_PATH=${SQLITE_PATH:-/app/data/aiswing.sqlite}
+      - SQLITE_DRIVER=${SQLITE_DRIVER:-node}
       - TASK_TTL_HOURS=${TASK_TTL_HOURS:-48}
       - KEY_ENCRYPTION_SECRET=${KEY_ENCRYPTION_SECRET:-change-this-secret-before-production}
       - WORKER_CONCURRENCY=${WORKER_CONCURRENCY:-1}
