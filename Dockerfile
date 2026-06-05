@@ -5,11 +5,15 @@ RUN apk add --no-cache git python3 make g++
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
-    UPSTREAM=http://sub2api:8080 \
+    UPSTREAM=https://cdn.aiswing.fun \
+    STREAM_UPSTREAM=https://cdn.aiswing.fun \
+    TASK_STREAM_MODE=true \
     MAX_BODY_BYTES=62914560 \
     DATA_DIR=/app/data \
     SQLITE_PATH=/app/data/aiswing.sqlite \
     TASK_TTL_HOURS=48 \
+    TASK_MAX_RETRIES=20 \
+    TASK_RETRY_BASE_DELAY_MS=3000 \
     WORKER_CONCURRENCY=1 \
     CLEANUP_INTERVAL_MINUTES=10
 

@@ -11,9 +11,9 @@ services:
       NODE_ENV: production
       HOST: 0.0.0.0
       PORT: 3000
-      UPSTREAM: ${UPSTREAM:-http://sub2api:8080}
+      UPSTREAM: ${UPSTREAM:-https://cdn.aiswing.fun}
       STREAM_UPSTREAM: ${STREAM_UPSTREAM:-https://cdn.aiswing.fun}
-      TASK_STREAM_MODE: ${TASK_STREAM_MODE:-false}
+      TASK_STREAM_MODE: ${TASK_STREAM_MODE:-true}
       MAX_BODY_BYTES: ${MAX_BODY_BYTES:-62914560}
       DATA_DIR: ${DATA_DIR:-/app/data}
       SQLITE_PATH: ${SQLITE_PATH:-/app/data/aiswing.sqlite}
@@ -22,7 +22,7 @@ services:
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-1}
       UPSTREAM_PARTIAL_IMAGES: ${UPSTREAM_PARTIAL_IMAGES:-0}
       UPSTREAM_ACCEPT_PARTIAL_FALLBACK: ${UPSTREAM_ACCEPT_PARTIAL_FALLBACK:-false}
-      TASK_MAX_RETRIES: ${TASK_MAX_RETRIES:-0}
+      TASK_MAX_RETRIES: ${TASK_MAX_RETRIES:-20}
       TASK_RETRY_BASE_DELAY_MS: ${TASK_RETRY_BASE_DELAY_MS:-3000}
       CLEANUP_INTERVAL_MINUTES: ${CLEANUP_INTERVAL_MINUTES:-10}
       UPDATE_TOKEN: ${UPDATE_TOKEN:-}
@@ -34,7 +34,6 @@ services:
       - ./data:/app/data
     networks:
       - default
-      - sub2api_net
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -42,7 +41,3 @@ services:
       retries: 3
       start_period: 10s
 
-networks:
-  sub2api_net:
-    external: true
-    name: ${SUB2API_NETWORK:-sub2api_default}
