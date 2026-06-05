@@ -1516,3 +1516,44 @@ html[lang="en"][data-theme="dark"] .theme-toggle::before {
   object-fit: contain !important;
   object-position: center center !important;
 }
+
+/* sidebar-task-list-scrollbar-v2026060502 */
+.sidebar {
+  height: calc(100dvh - 32px) !important;
+  max-height: calc(100dvh - 32px) !important;
+}
+
+.task-list {
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-content: stretch !important;
+  min-height: 120px !important;
+  height: auto !important;
+  max-height: calc(100dvh - 230px) !important;
+  overflow-y: scroll !important;
+  overflow-x: hidden !important;
+  padding-right: 6px !important;
+  scrollbar-gutter: stable both-edges !important;
+}
+
+.task-item {
+  flex: 0 0 auto !important;
+}
+
+.task-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.task-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.task-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.55);
+}
+
+.task-list::-webkit-scrollbar-thumb:hover {
+  background: rgba(100, 116, 139, 0.75);
+}
