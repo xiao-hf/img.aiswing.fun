@@ -1,0 +1,135 @@
+﻿{
+    "run_id":  "20260605-164454",
+    "health":  {
+                   "ok":  true,
+                   "upstream":  "https://cdn.aiswing.fun",
+                   "build":  "2026050965",
+                   "mode":  "sqlite-async-tasks",
+                   "data_dir":  "D:\\A_workspace\\A_ziyan\\gpt生图\\img.aiswing.fun\\data",
+                   "update_enabled":  false,
+                   "task_ttl_hours":  48,
+                   "worker_concurrency":  1,
+                   "stream_upstream":  "https://cdn.aiswing.fun",
+                   "task_stream_mode":  true,
+                   "upstream_partial_images":  0,
+                   "upstream_accept_partial_fallback":  false,
+                   "task_max_retries":  20
+               },
+    "total":  10,
+    "succeeded":  6,
+    "failed":  4,
+    "unfinished":  0,
+    "submit_failed":  0,
+    "tasks":  [
+                  {
+                      "index":  1,
+                      "id":  "task_mq0ohukc_099b3159aa727d20",
+                      "submitted_at":  "2026-06-05T16:44:54.4239664+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:45:58.3649278+08:00",
+                      "duration_sec":  63.9,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohukc_099b3159aa727d20/image.png?ts=1780649153140\u0026sig=2vp5I8n8NHQxuYV62dWAT6Tfxt8tVWlPL_MS5EFCRIU"
+                  },
+                  {
+                      "index":  2,
+                      "id":  "task_mq0ohuud_afce48597fa31f42",
+                      "submitted_at":  "2026-06-05T16:44:54.7587261+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:46:18.5935883+08:00",
+                      "duration_sec":  83.8,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohuud_afce48597fa31f42/image.png?ts=1780649176206\u0026sig=FzIUJPOVy8CW7aLbw7gPCgxSDAD7GSth9sCktZTMPkk"
+                  },
+                  {
+                      "index":  3,
+                      "id":  "task_mq0ohv3f_15763e33251838ab",
+                      "submitted_at":  "2026-06-05T16:44:55.0857819+08:00",
+                      "status":  "failed",
+                      "progress":  "failed",
+                      "final_at":  "2026-06-05T16:46:48.8447237+08:00",
+                      "duration_sec":  113.8,
+                      "error":  "Task failed",
+                      "image_url":  ""
+                  },
+                  {
+                      "index":  4,
+                      "id":  "task_mq0ohvcl_24b7c82167c03292",
+                      "submitted_at":  "2026-06-05T16:44:55.4154862+08:00",
+                      "status":  "failed",
+                      "progress":  "failed",
+                      "final_at":  "2026-06-05T16:47:19.1084560+08:00",
+                      "duration_sec":  143.7,
+                      "error":  "Task failed",
+                      "image_url":  ""
+                  },
+                  {
+                      "index":  5,
+                      "id":  "task_mq0ohvlq_539eee05bcf3efe9",
+                      "submitted_at":  "2026-06-05T16:44:55.7444922+08:00",
+                      "status":  "failed",
+                      "progress":  "failed",
+                      "final_at":  "2026-06-05T16:47:49.3283228+08:00",
+                      "duration_sec":  173.6,
+                      "error":  "Task failed",
+                      "image_url":  ""
+                  },
+                  {
+                      "index":  6,
+                      "id":  "task_mq0ohvut_c931034bfa9420a0",
+                      "submitted_at":  "2026-06-05T16:44:56.0719006+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:48:19.5739802+08:00",
+                      "duration_sec":  203.5,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohvut_c931034bfa9420a0/image.png?ts=1780649291109\u0026sig=7n_OC_CKO9uRKF8l_MBweVK9HhAolW7TBC-flODgjTw"
+                  },
+                  {
+                      "index":  7,
+                      "id":  "task_mq0ohw3y_379a12c1990d87ca",
+                      "submitted_at":  "2026-06-05T16:44:56.4006196+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:49:09.8590946+08:00",
+                      "duration_sec":  253.5,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohw3y_379a12c1990d87ca/image.png?ts=1780649349346\u0026sig=khSz7Cq-kDWT1AFUZQBk440Vu6X0kq_9ArAQ_4PL_mM"
+                  },
+                  {
+                      "index":  8,
+                      "id":  "task_mq0ohwd2_244d595e75091fc5",
+                      "submitted_at":  "2026-06-05T16:44:56.7292309+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:49:40.0288639+08:00",
+                      "duration_sec":  283.3,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohwd2_244d595e75091fc5/image.png?ts=1780649375427\u0026sig=OKDkt-M7CTCka28zQbWPk_uqaBvRUZ3gO4UZbXn899I"
+                  },
+                  {
+                      "index":  9,
+                      "id":  "task_mq0ohwm5_48df6b63b517d8fa",
+                      "submitted_at":  "2026-06-05T16:44:57.0558267+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:50:00.1056883+08:00",
+                      "duration_sec":  303,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0ohwm5_48df6b63b517d8fa/image.png?ts=1780649397406\u0026sig=nuOlD4jHhG6eVfSiixQIsLZog9dOrdnLFgACec4TuAU"
+                  },
+                  {
+                      "index":  10,
+                      "id":  "task_mq0ohwv8_3e024caccabf92a6",
+                      "submitted_at":  "2026-06-05T16:44:57.3824443+08:00",
+                      "status":  "failed",
+                      "progress":  "failed",
+                      "final_at":  "2026-06-05T16:50:30.1668988+08:00",
+                      "duration_sec":  332.8,
+                      "error":  "Task failed",
+                      "image_url":  ""
+                  }
+              ]
+}

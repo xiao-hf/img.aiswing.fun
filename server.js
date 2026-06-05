@@ -308,7 +308,7 @@ async function processTask(taskId) {
   const startedAt = nowMs();
   const changed = statements.markRunning.run({
     id: taskId,
-    progress: "queued",
+    progress: "calling upstream",
     started_at: startedAt,
     updated_at: startedAt,
   });
@@ -349,7 +349,7 @@ async function processTask(taskId) {
     });
   } catch (error) {
     const completedAt = nowMs();
-    const message = error?.message || "Task failed";
+    const message = publicErrorMessage(error);
     console.error("[task failed]", {
       task_id: taskId,
       model: task.model,
@@ -398,8 +398,29 @@ async function generateImageB64WithRetry(taskId, payload, apiKey, onProgress) {
 function isRetryableUpstreamError(error) {
   if (!error) return false;
   if ([408, 409, 425, 429, 500, 502, 503, 504].includes(Number(error.status))) return true;
-  const message = String(error.message || "");
-  return /upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
+  const message = [
+    error.message,
+    error.code,
+    error.name,
+    error.stack,
+    error.cause?.message,
+    error.cause?.code,
+  ].filter(Boolean).join(" ");
+  return /rate limit reached|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
+}
+
+function publicErrorMessage(error, fallback = "Task failed") {
+  const parts = [
+    error?.message,
+    error?.code,
+    error?.name,
+    error?.cause?.message,
+    error?.cause?.code,
+  ].filter(Boolean);
+  if (parts.length) return parts.join(" ");
+  const stack = String(error?.stack || "");
+  const firstLine = stack.split(/\r?\n/).find(Boolean);
+  return firstLine || fallback;
 }
 
 function sleep(ms) {

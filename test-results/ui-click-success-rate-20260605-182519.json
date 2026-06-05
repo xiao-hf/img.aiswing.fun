@@ -1,0 +1,123 @@
+﻿{
+    "source":  "real-ui-click-generateButton",
+    "total":  10,
+    "succeeded":  10,
+    "failed":  0,
+    "unfinished":  0,
+    "success_rate":  1,
+    "passed":  true,
+    "ids":  [
+                "task_mq0s0qxn_767d4739fb252f16",
+                "task_mq0s0v76_db109459150af485",
+                "task_mq0s0zgn_3d8fc9a05e8e5b57",
+                "task_mq0s13qg_71c064d50374c0d4",
+                "task_mq0s1806_d10a8460e5fb1fc2",
+                "task_mq0s1ca3_c8ce3d6018259309",
+                "task_mq0s1gk5_57d7f974a3e6b499",
+                "task_mq0s1kuq_80010307fbe0e2ec",
+                "task_mq0s1p7n_a9e79d12db5e26e7",
+                "task_mq0s1to1_c71f2597c1c76423"
+            ],
+    "rows":  [
+                 {
+                     "id":  "task_mq0s0qxn_767d4739fb252f16",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s0qxn_767d4739fb252f16/image.png?ts=1780655038129\u0026sig=INh8JX4-AwbQ95PjJs34R2QcmWmyKrmrC8nfqpnnryc",
+                     "created_at":  1780655015003,
+                     "started_at":  1780655015011,
+                     "completed_at":  1780655038129
+                 },
+                 {
+                     "id":  "task_mq0s0v76_db109459150af485",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s0v76_db109459150af485/image.png?ts=1780655059796\u0026sig=C9vJKtrFGNoBIgvt3lzaZ7W20KAfuC4cZYv3QFwAaJQ",
+                     "created_at":  1780655020530,
+                     "started_at":  1780655038136,
+                     "completed_at":  1780655059796
+                 },
+                 {
+                     "id":  "task_mq0s0zgn_3d8fc9a05e8e5b57",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s0zgn_3d8fc9a05e8e5b57/image.png?ts=1780655082497\u0026sig=6m1EGxsLwER6AZXat8r-JHBdPNhmJl2-cyoL0ldEyyQ",
+                     "created_at":  1780655026055,
+                     "started_at":  1780655059816,
+                     "completed_at":  1780655082497
+                 },
+                 {
+                     "id":  "task_mq0s13qg_71c064d50374c0d4",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s13qg_71c064d50374c0d4/image.png?ts=1780655130573\u0026sig=-_m5jQc-benAIHuG5mR5Xk67Kz_LogbSel4f2pmvn_I",
+                     "created_at":  1780655031592,
+                     "started_at":  1780655082503,
+                     "completed_at":  1780655130573
+                 },
+                 {
+                     "id":  "task_mq0s1806_d10a8460e5fb1fc2",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1806_d10a8460e5fb1fc2/image.png?ts=1780655153411\u0026sig=22hm-tFro-QkA5at9hX7IEZqwFpcKoLUdFKFjoDbmHw",
+                     "created_at":  1780655037126,
+                     "started_at":  1780655130579,
+                     "completed_at":  1780655153411
+                 },
+                 {
+                     "id":  "task_mq0s1ca3_c8ce3d6018259309",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1ca3_c8ce3d6018259309/image.png?ts=1780655183452\u0026sig=_YU07u-IDUg4mmohvU5qePCZkOyBedrfUDBIA7Zs2cs",
+                     "created_at":  1780655042667,
+                     "started_at":  1780655153425,
+                     "completed_at":  1780655183452
+                 },
+                 {
+                     "id":  "task_mq0s1gk5_57d7f974a3e6b499",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1gk5_57d7f974a3e6b499/image.png?ts=1780655246842\u0026sig=EJ9h09dgsD8xNrEQLTpneUy2zPGSrtfrTqXkGJ4oSbY",
+                     "created_at":  1780655048213,
+                     "started_at":  1780655183463,
+                     "completed_at":  1780655246842
+                 },
+                 {
+                     "id":  "task_mq0s1kuq_80010307fbe0e2ec",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1kuq_80010307fbe0e2ec/image.png?ts=1780655274725\u0026sig=GMknVROER8FI1vndEDl4DV_sWPJ_In9MygdPEVxmW5U",
+                     "created_at":  1780655053778,
+                     "started_at":  1780655246850,
+                     "completed_at":  1780655274725
+                 },
+                 {
+                     "id":  "task_mq0s1p7n_a9e79d12db5e26e7",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1p7n_a9e79d12db5e26e7/image.png?ts=1780655368059\u0026sig=UV5pILm2Bg-Yd913Vfe8NAwO1NkCDW8vtRxfExFRVVI",
+                     "created_at":  1780655059427,
+                     "started_at":  1780655274732,
+                     "completed_at":  1780655368059
+                 },
+                 {
+                     "id":  "task_mq0s1to1_c71f2597c1c76423",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0s1to1_c71f2597c1c76423/image.png?ts=1780655390281\u0026sig=Vt3ycxzYY9844RNKcXFK7nWnGqTLQmsja5_q2em2WLg",
+                     "created_at":  1780655065201,
+                     "started_at":  1780655368065,
+                     "completed_at":  1780655390281
+                 }
+             ]
+}

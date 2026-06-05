@@ -1,0 +1,64 @@
+﻿{
+    "run_id":  "20260605-165405",
+    "total":  5,
+    "succeeded":  5,
+    "failed":  0,
+    "unfinished":  0,
+    "tasks":  [
+                  {
+                      "index":  1,
+                      "id":  "task_mq0otnyz_12c9c397c8066d26",
+                      "submitted_at":  "2026-06-05T16:54:05.7443612+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:55:28.5828748+08:00",
+                      "duration_sec":  82.8,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0otnyz_12c9c397c8066d26/image.png?ts=1780649723033\u0026sig=bFnWw9fgIkeMkQ3bVlADOZNFl7X3l8qSe9iI6icVt7s"
+                  },
+                  {
+                      "index":  2,
+                      "id":  "task_mq0oto9a_5f15f7a2ce77b439",
+                      "submitted_at":  "2026-06-05T16:54:06.0974173+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T16:56:29.3517156+08:00",
+                      "duration_sec":  143.3,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0oto9a_5f15f7a2ce77b439/image.png?ts=1780649788709\u0026sig=U1KmTW3tltTRf_TK_MtF_-AgNn-trsucTOpMYS-fik0"
+                  },
+                  {
+                      "index":  3,
+                      "id":  "task_mq0otoit_411f84daa44f2c9b",
+                      "submitted_at":  "2026-06-05T16:54:06.4407360+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T17:01:01.1672918+08:00",
+                      "duration_sec":  414.7,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0otoit_411f84daa44f2c9b/image.png?ts=1780650057792\u0026sig=m1KFpoTFf3OMAzmL4BnxxTIjL6_bYQuq2p8g2wbfT2w"
+                  },
+                  {
+                      "index":  4,
+                      "id":  "task_mq0otosc_c1c6e14e9592e303",
+                      "submitted_at":  "2026-06-05T16:54:06.7846979+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T17:01:21.3060241+08:00",
+                      "duration_sec":  434.5,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0otosc_c1c6e14e9592e303/image.png?ts=1780650078781\u0026sig=f0bFDnlHG3JD5DyWgKzq-JrnGjemqVeAAq5JuJLRgIM"
+                  },
+                  {
+                      "index":  5,
+                      "id":  "task_mq0otp1s_b4be1e7081b31645",
+                      "submitted_at":  "2026-06-05T16:54:07.1237487+08:00",
+                      "status":  "succeeded",
+                      "progress":  "completed",
+                      "final_at":  "2026-06-05T17:01:51.4530629+08:00",
+                      "duration_sec":  464.3,
+                      "error":  "",
+                      "image_url":  "/api/tasks/task_mq0otp1s_b4be1e7081b31645/image.png?ts=1780650107465\u0026sig=Ce8e7EqzxHI0Wvng0mahwg8Uq8QCvZYS2fEQbLQRIJ4"
+                  }
+              ]
+}

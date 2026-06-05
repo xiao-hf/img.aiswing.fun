@@ -1,0 +1,123 @@
+﻿{
+    "source":  "browser-page-submitted-tasks",
+    "total":  10,
+    "succeeded":  10,
+    "failed":  0,
+    "unfinished":  0,
+    "success_rate":  1,
+    "passed":  true,
+    "ids":  [
+                "task_mq0rppk8_c787563bcdb5e26d",
+                "task_mq0rppt3_1e2a09bddd2cd9b3",
+                "task_mq0rpq1s_70734e3b866b4cbc",
+                "task_mq0rpqah_46c574fb826a19f7",
+                "task_mq0rpqj4_4944ce64c7bac3e5",
+                "task_mq0rpqrt_cede718df8619838",
+                "task_mq0rpr0f_dbb3e3b91d026cf6",
+                "task_mq0rpr92_c9c42f65c5c0423e",
+                "task_mq0rprhs_c9c00a608b6aa773",
+                "task_mq0rprqe_1a179882de7a6f39"
+            ],
+    "rows":  [
+                 {
+                     "id":  "task_mq0rppk8_c787563bcdb5e26d",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rppk8_c787563bcdb5e26d/image.png?ts=1780654525689\u0026sig=YZ3TML9XbPrF5-DAB7IS4Fdgpv_7ciy0-6fOsFVCmLk",
+                     "created_at":  1780654500008,
+                     "started_at":  1780654500010,
+                     "completed_at":  1780654525689
+                 },
+                 {
+                     "id":  "task_mq0rppt3_1e2a09bddd2cd9b3",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rppt3_1e2a09bddd2cd9b3/image.png?ts=1780654549312\u0026sig=fDO2uLWFT3yWTrhlgw4kfsru9zbaePRwx4EBd-B3t5o",
+                     "created_at":  1780654500327,
+                     "started_at":  1780654525693,
+                     "completed_at":  1780654549312
+                 },
+                 {
+                     "id":  "task_mq0rpq1s_70734e3b866b4cbc",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpq1s_70734e3b866b4cbc/image.png?ts=1780654620893\u0026sig=DiGrlm6JqGsSdwz1jX0dt3C8f3v6N0H_68XZ-lRvyLg",
+                     "created_at":  1780654500640,
+                     "started_at":  1780654549317,
+                     "completed_at":  1780654620893
+                 },
+                 {
+                     "id":  "task_mq0rpqah_46c574fb826a19f7",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpqah_46c574fb826a19f7/image.png?ts=1780654647129\u0026sig=mnZ7q0IDD26KgRBwr1nBnRrr7hK_nMH3b1fLNY1jEHs",
+                     "created_at":  1780654500953,
+                     "started_at":  1780654620909,
+                     "completed_at":  1780654647129
+                 },
+                 {
+                     "id":  "task_mq0rpqj4_4944ce64c7bac3e5",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpqj4_4944ce64c7bac3e5/image.png?ts=1780654668963\u0026sig=t7Y0giZ1p2-mqvuYTgKAoCVChlAifOhQLWOlPsdE60k",
+                     "created_at":  1780654501264,
+                     "started_at":  1780654647135,
+                     "completed_at":  1780654668963
+                 },
+                 {
+                     "id":  "task_mq0rpqrt_cede718df8619838",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpqrt_cede718df8619838/image.png?ts=1780654689179\u0026sig=6DTPg5tY-xHpDpJdl9vZ1S4rwJtJP8nZ1YxyG9UgjKA",
+                     "created_at":  1780654501577,
+                     "started_at":  1780654668969,
+                     "completed_at":  1780654689179
+                 },
+                 {
+                     "id":  "task_mq0rpr0f_dbb3e3b91d026cf6",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpr0f_dbb3e3b91d026cf6/image.png?ts=1780654710922\u0026sig=tRnFlKfXyhqaKhxYuQ916d-LTZn8PZhZGMz5ausO3o0",
+                     "created_at":  1780654501887,
+                     "started_at":  1780654689195,
+                     "completed_at":  1780654710922
+                 },
+                 {
+                     "id":  "task_mq0rpr92_c9c42f65c5c0423e",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rpr92_c9c42f65c5c0423e/image.png?ts=1780654748437\u0026sig=dj-EfNMSOzyhFtyI-NgQ5L9BUYjtDULr_C1w7K9GioE",
+                     "created_at":  1780654502198,
+                     "started_at":  1780654710935,
+                     "completed_at":  1780654748437
+                 },
+                 {
+                     "id":  "task_mq0rprhs_c9c00a608b6aa773",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rprhs_c9c00a608b6aa773/image.png?ts=1780654769637\u0026sig=XFWkfCqNK7uiQM8L_FDzhBcGrV3yCZwIor8k5hUaPLI",
+                     "created_at":  1780654502512,
+                     "started_at":  1780654748443,
+                     "completed_at":  1780654769637
+                 },
+                 {
+                     "id":  "task_mq0rprqe_1a179882de7a6f39",
+                     "status":  "succeeded",
+                     "progress":  "completed",
+                     "error":  "",
+                     "image_url":  "/api/tasks/task_mq0rprqe_1a179882de7a6f39/image.png?ts=1780654802438\u0026sig=8hlV9GGcYacO7dBFJTie3-zYcJsq3wsJ3RTFE7KdiS8",
+                     "created_at":  1780654502822,
+                     "started_at":  1780654769643,
+                     "completed_at":  1780654802438
+                 }
+             ]
+}
