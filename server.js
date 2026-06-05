@@ -35,6 +35,7 @@ const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
 const upstreamAcceptPartialFallback = false;
 const taskMaxRetries = Math.max(0, Math.floor(Number(process.env.TASK_MAX_RETRIES || 0)));
 const taskRetryBaseDelayMs = Math.max(0, Number(process.env.TASK_RETRY_BASE_DELAY_MS || 3000));
+const fourKCooldownMs = Math.max(0, Number(process.env.FOUR_K_COOLDOWN_MS || 90000));
 const updateToken = process.env.UPDATE_TOKEN || "";
 const updateCommand = process.env.UPDATE_COMMAND || "rm -rf /tmp/aiswing-image-studio-update && git clone --depth 1 https://github.com/xiao-hf/img.aiswing.fun.git /tmp/aiswing-image-studio-update && cp -a /tmp/aiswing-image-studio-update/. /app/ && npm install --omit=dev && node --check server.js";
 const updateTimeoutMs = Number(process.env.UPDATE_TIMEOUT_MS || 10 * 60 * 1000);
@@ -47,6 +48,7 @@ let updateState = {
   output: "",
   error: "",
 };
+let nextFourKAllowedAt = 0;
 
 function loadSqliteDatabase() {
   try {
@@ -264,6 +266,20 @@ function isValidImageSignature(task, signature) {
   return expectedBuffer.length === actualBuffer.length && crypto.timingSafeEqual(expectedBuffer, actualBuffer);
 }
 
+function isFourKSize(size) {
+  return ["3840x2160", "2160x3840", "2880x2880"].includes(String(size || ""));
+}
+
+async function waitForFourKCooldown(size, onProgress = () => {}) {
+  if (!isFourKSize(size) || fourKCooldownMs <= 0) return;
+  const now = Date.now();
+  const waitMs = Math.max(0, nextFourKAllowedAt - now);
+  nextFourKAllowedAt = Math.max(nextFourKAllowedAt, now) + fourKCooldownMs;
+  if (waitMs <= 0) return;
+  onProgress(`4K cooldown ${Math.ceil(waitMs / 1000)}s`);
+  await sleep(waitMs);
+}
+
 function taskImageUrl(task) {
   if (!task || task.status !== "succeeded") return "";
   const ts = encodeURIComponent(String(task.updated_at || ""));
@@ -371,6 +387,9 @@ async function processTask(taskId) {
     const references = normalizeReferenceImages(JSON.parse(task.reference_images || "[]"));
     if (references.length) payload.reference_images = references;
 
+    await waitForFourKCooldown(payload.size, (progress) => {
+      statements.updateProgress.run({ id: taskId, progress, updated_at: nowMs() });
+    });
     const b64 = await generateImageB64WithRetry(taskId, payload, apiKey, (progress, previewB64 = "") => {
       const updatedAt = nowMs();
       if (previewB64) {
@@ -1565,6 +1584,7 @@ const server = http.createServer((req, res) => {
       upstream_partial_images: upstreamPartialImages,
       upstream_accept_partial_fallback: upstreamAcceptPartialFallback,
       task_max_retries: taskMaxRetries,
+      four_k_cooldown_ms: fourKCooldownMs,
     });
     return;
   }
