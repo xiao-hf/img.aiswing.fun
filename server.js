@@ -418,12 +418,15 @@ async function generateImageB64WithRetry(taskId, payload, apiKey, onProgress) {
   let lastError;
   for (let attempt = 0; attempt <= taskMaxRetries; attempt += 1) {
     try {
-      if (attempt > 0) onProgress(`retry ${attempt}/${taskMaxRetries}`);
+      if (attempt > 0) {
+        const reason = retryProgressReason(lastError);
+        onProgress(`retry ${attempt}/${taskMaxRetries}${reason ? ` - ${reason}` : ""}`);
+      }
       return await generateImageB64(payload, apiKey, onProgress);
     } catch (error) {
       lastError = error;
       if (!isRetryableUpstreamError(error) || attempt >= taskMaxRetries) break;
-      const delayMs = taskRetryBaseDelayMs * attempt;
+      const delayMs = retryDelayMs(attempt + 1);
       console.warn("[task retry]", {
         task_id: taskId,
         attempt,
@@ -437,6 +440,24 @@ async function generateImageB64WithRetry(taskId, payload, apiKey, onProgress) {
   throw lastError;
 }
 
+function retryDelayMs(nextAttempt) {
+  if (taskRetryBaseDelayMs <= 0) return 0;
+  const cappedAttempt = Math.max(1, Math.min(6, Number(nextAttempt) || 1));
+  const exponential = taskRetryBaseDelayMs * (2 ** (cappedAttempt - 1));
+  const jitter = Math.floor(Math.random() * taskRetryBaseDelayMs);
+  return Math.min(120000, exponential + jitter);
+}
+
+function retryProgressReason(error) {
+  const message = publicErrorMessage(error, "").replace(/\s+/g, " ").trim();
+  if (!message) return "";
+  if (/rate limit/i.test(message)) return "rate limited";
+  if (/timeout|ETIMEDOUT|request timeout/i.test(message)) return "upstream timeout";
+  if (/ended without final image data|no final image/i.test(message)) return "no final image";
+  if (/stream disconnected|terminated|aborted|socket hang up|ECONNRESET/i.test(message)) return "stream disconnected";
+  return message.slice(0, 80);
+}
+
 function isRetryableUpstreamError(error) {
   if (!error) return false;
   if ([408, 409, 425, 429, 500, 502, 503, 504].includes(Number(error.status))) return true;
@@ -448,21 +469,41 @@ function isRetryableUpstreamError(error) {
     error.cause?.message,
     error.cause?.code,
   ].filter(Boolean).join(" ");
-  return /rate limit reached|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
+  return /rate limit reached|upstream_error|upstream request failed|response\.failed|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
 }
 
 function publicErrorMessage(error, fallback = "Task failed") {
-  const parts = [
+  const raw = [
     error?.message,
     error?.code,
     error?.name,
     error?.cause?.message,
     error?.cause?.code,
-  ].filter(Boolean);
-  if (parts.length) return parts.join(" ");
-  const stack = String(error?.stack || "");
-  const firstLine = stack.split(/\r?\n/).find(Boolean);
-  return firstLine || fallback;
+  ].filter(Boolean).join(" ") || String(error?.stack || "").split(/\r?\n/).find(Boolean) || fallback;
+  return sanitizePublicError(raw, fallback);
+}
+
+function sanitizePublicError(value, fallback = "Task failed") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  const jsonMatch = raw.match(/\{[\s\S]*\}/);
+  if (jsonMatch) {
+    try {
+      const parsed = JSON.parse(jsonMatch[0]);
+      const message = parsed?.error?.message || parsed?.message || parsed?.response?.error?.message || "";
+      const code = parsed?.error?.code || parsed?.error?.type || parsed?.response?.error?.code || "";
+      if (code === "upstream_error" || /upstream request failed/i.test(message)) {
+        return "Upstream image channel failed. Please retry later or switch API key.";
+      }
+      if (message) return code ? `${message} (${code})` : message;
+    } catch {}
+  }
+  if (/upstream_error|upstream request failed|response\.failed/i.test(raw)) {
+    return "Upstream image channel failed. Please retry later or switch API key.";
+  }
+  if (/rate limit/i.test(raw)) return "Rate limit reached. Please wait and retry.";
+  if (/timeout|ETIMEDOUT|request timeout/i.test(raw)) return "Upstream request timeout. Please retry later.";
+  return raw.replace(/\s+/g, " ").slice(0, 240);
 }
 
 function sleep(ms) {
