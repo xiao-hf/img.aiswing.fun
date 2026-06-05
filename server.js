@@ -6,7 +6,7 @@ const path = require("path");
 const crypto = require("crypto");
 const { exec } = require("child_process");
 const { URL } = require("url");
-const Database = require("better-sqlite3");
+const Database = loadSqliteDatabase();
 
 const root = __dirname;
 const frontendRoot = path.join(root, "frontend");
@@ -47,6 +47,48 @@ let updateState = {
   output: "",
   error: "",
 };
+
+function loadSqliteDatabase() {
+  try {
+    return require("better-sqlite3");
+  } catch (error) {
+    try {
+      const { DatabaseSync } = require("node:sqlite");
+      return class NodeSqliteCompat {
+        constructor(filename) {
+          this.db = new DatabaseSync(filename);
+        }
+        pragma(sql) {
+          return this.db.exec(`PRAGMA ${sql}`);
+        }
+        exec(sql) {
+          return this.db.exec(sql);
+        }
+        prepare(sql) {
+          const statement = this.db.prepare(sql);
+          const normalizeArgs = (args) => {
+            if (args.length === 0) return [];
+            if (args.length === 1) return [args[0]];
+            return args;
+          };
+          return {
+            get: (...args) => {
+              return statement.get(...normalizeArgs(args));
+            },
+            all: (...args) => {
+              return statement.all(...normalizeArgs(args));
+            },
+            run: (...args) => {
+              return statement.run(...normalizeArgs(args));
+            },
+          };
+        }
+      };
+    } catch {
+      throw error;
+    }
+  }
+}
 
 fs.mkdirSync(imageDir, { recursive: true });
 

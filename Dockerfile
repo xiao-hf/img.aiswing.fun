@@ -1,7 +1,7 @@
 FROM node:22-alpine
 
 WORKDIR /app
-RUN apk add --no-cache git python3 make g++
+RUN apk add --no-cache git
 ENV NODE_ENV=production \
     HOST=0.0.0.0 \
     PORT=3000 \
@@ -18,7 +18,7 @@ ENV NODE_ENV=production \
     CLEANUP_INTERVAL_MINUTES=10
 
 COPY package*.json ./
-RUN npm ci --omit=dev || npm install --omit=dev
+RUN npm ci --omit=dev --ignore-scripts || npm install --omit=dev --ignore-scripts
 
 COPY . .
 RUN node --check server.js
