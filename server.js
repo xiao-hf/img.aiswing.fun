@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050965";
+const build = "2026050966";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -200,7 +200,7 @@ const statements = {
   markSucceeded: db.prepare(`
     UPDATE tasks
     SET status = 'succeeded', progress = @progress, result_path = @result_path,
-        api_key_enc = NULL, reference_images = NULL,
+        preview_b64 = NULL, api_key_enc = NULL, reference_images = NULL,
         completed_at = @completed_at, expires_at = @expires_at,
         updated_at = @updated_at
     WHERE id = @id
@@ -291,6 +291,7 @@ function taskImageUrl(task) {
 function safeTask(task) {
   if (!task) return null;
   const imageUrl = taskImageUrl(task);
+  const previewB64 = task.status === "running" || task.status === "pending" ? task.preview_b64 || "" : "";
   return {
     id: task.id,
     model: task.model,
@@ -302,7 +303,7 @@ function safeTask(task) {
     reference_count: task.reference_count || 0,
     status: task.status,
     progress: task.progress || "",
-    preview_b64: task.preview_b64 || "",
+    preview_b64: previewB64,
     error_message: task.error_message || "",
     image_url: imageUrl,
     created_at: task.created_at,

@@ -375,7 +375,40 @@ function hydrateLocalTasks() {
 }
 
 function persistLocalTasks() {
-  localStorage.setItem(getTasksCacheKey(), JSON.stringify(state.tasks.slice(0, MAX_TASKS)));
+  const cachedTasks = state.tasks.slice(0, MAX_TASKS).map((task) => ({
+    ...task,
+    // 流式预览可能达到数 MB，直接写 localStorage 会触发 QuotaExceededError，
+    // 进而阻断轮询渲染，表现为后端已完成但页面还停在 keepalive/生成中。
+    preview_b64: "",
+  }));
+  try {
+    localStorage.setItem(getTasksCacheKey(), JSON.stringify(cachedTasks));
+  } catch {
+    try {
+      localStorage.removeItem(getTasksCacheKey());
+      localStorage.setItem(getTasksCacheKey(), JSON.stringify(cachedTasks.map((task) => ({
+        id: task.id,
+        model: task.model,
+        prompt: task.prompt,
+        size: task.size,
+        quality: task.quality,
+        format: task.format,
+        mode: task.mode,
+        reference_count: task.reference_count,
+        status: task.status,
+        progress: task.progress,
+        error_message: task.error_message,
+        image_url: task.image_url,
+        created_at: task.created_at,
+        started_at: task.started_at,
+        completed_at: task.completed_at,
+        expires_at: task.expires_at,
+        updated_at: task.updated_at,
+      }))));
+    } catch {
+      // 缓存失败不应影响页面渲染和任务轮询。
+    }
+  }
 }
 
 function getTasksCacheKey() {
@@ -646,9 +679,9 @@ function normalizeTask(task) {
 
 function upsertTask(task) {
   state.tasks = [task, ...state.tasks.filter((item) => item.id !== task.id)].sort((a, b) => b.created_at - a.created_at).slice(0, MAX_TASKS);
-  persistLocalTasks();
   renderTaskList();
   refreshTaskCounters();
+  persistLocalTasks();
 }
 
 function renderTaskList() {
