@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050967";
+const build = "2026050968";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -91,7 +91,15 @@ function loadNodeSqliteCompat() {
       return {
         get: (...args) => statement.get(...normalizeArgs(args)),
         all: (...args) => statement.all(...normalizeArgs(args)),
-        run: (...args) => statement.run(...normalizeArgs(args)),
+        run: (...args) => {
+          const result = statement.run(...normalizeArgs(args));
+          // node:sqlite 返回 { changes, lastInsertRowid }，字段是 BigInt；
+          // better-sqlite3 返回普通 number。worker 依赖 changes 判断 UPDATE 是否成功。
+          return {
+            changes: Number(result?.changes || 0),
+            lastInsertRowid: Number(result?.lastInsertRowid || 0),
+          };
+        },
       };
     }
   };
