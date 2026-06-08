@@ -858,68 +858,60 @@ async function loadTaskImageBlob(task, img, stage, downloadButton, token) {
   state.currentFileName = fileName;
   downloadButton.disabled = false;
 
-  let settled = false;
-  let fallbackStarted = false;
-  let fallbackTimerId = 0;
-
   const isCurrent = () => token === state.imageLoadToken && state.selectedTaskId === task.id;
   const markReady = () => {
     if (!isCurrent()) return;
-    settled = true;
-    window.clearTimeout(fallbackTimerId);
     downloadButton.disabled = false;
     setStatus(isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210\uff0c\u7ed3\u679c\u4fdd\u7559 48 \u5c0f\u65f6" : "Image ready, retained for 48 hours", "success");
   };
 
-  const startFallback = async (reason) => {
-    if (settled || fallbackStarted || !isCurrent()) return;
-    fallbackStarted = true;
-    window.clearTimeout(fallbackTimerId);
-    setStatus(isZh() ? "\u6b63\u5728\u52a0\u8f7d\u9884\u89c8\u8d44\u6e90" : "Loading preview resource", "loading");
+  stage.innerHTML = `<div class="empty-inner"><strong>${isZh() ? "\u56fe\u7247\u5df2\u5b8c\u6210" : "Image ready"}</strong><span>${isZh() ? "\u6b63\u5728\u4e0b\u8f7d\u5e76\u89e3\u7801 4K \u539f\u56fe\uff0c\u5b8c\u6210\u540e\u4e00\u6b21\u6027\u663e\u793a..." : "Downloading and decoding the original image, then showing it at once..."}</span></div>`;
+  setStatus(isZh() ? "\u6b63\u5728\u4e0b\u8f7d\u5e76\u89e3\u7801\u539f\u56fe" : "Downloading and decoding original image", "loading");
+
+  try {
+    const response = await fetchWithTimeout(imageUrl, { headers: authHeaders() }, PREVIEW_TIMEOUT_MS);
+    if (!response.ok) {
+      let message = `Image read failed HTTP ${response.status}`;
+      try {
+        const payload = await response.clone().json();
+        message = payload?.error?.message || payload?.message || message;
+      } catch {
+        // keep status code message
+      }
+      throw new Error(message);
+    }
+
+    const blob = await response.blob();
+    if (!isCurrent()) return;
+    if (!blob.type.startsWith("image/")) {
+      throw new Error(`Image endpoint returned ${blob.type || "non-image data"}`);
+    }
+
+    const objectUrl = URL.createObjectURL(blob);
+    state.currentObjectUrl = objectUrl;
+    state.currentImageUrl = objectUrl;
+    state.currentFileName = fileName;
+
+    img.decoding = "async";
+    img.loading = "eager";
+    img.alt = task.prompt || (isZh() ? "\u751f\u6210\u7ed3\u679c" : "Generated image");
+    img.src = objectUrl;
 
     try {
-      const response = await fetchWithTimeout(imageUrl, { headers: authHeaders() }, PREVIEW_TIMEOUT_MS);
-      if (!response.ok) {
-        let message = `Image read failed HTTP ${response.status}`;
-        try {
-          const payload = await response.clone().json();
-          message = payload?.error?.message || payload?.message || message;
-        } catch {
-          // keep status code message
-        }
-        throw new Error(message);
-      }
-      const blob = await response.blob();
-      if (!isCurrent()) return;
-      if (!blob.type.startsWith("image/")) {
-        throw new Error(`Image endpoint returned ${blob.type || "non-image data"}`);
-      }
-      const objectUrl = URL.createObjectURL(blob);
-      state.currentObjectUrl = objectUrl;
-      state.currentImageUrl = objectUrl;
-      state.currentFileName = fileName;
-      img.onload = markReady;
-      img.onerror = () => showPreviewError(stage, downloadButton, task, "Downloaded image decode failed");
-      img.src = objectUrl;
-    } catch (error) {
-      if (!isCurrent()) return;
-      showPreviewError(stage, downloadButton, task, error.message || reason || "Image preview failed");
+      if (img.decode) await img.decode();
+    } catch {
+      // Some browsers reject decode() for already-decoded images; onload fallback below handles it.
     }
-  };
 
-  img.decoding = "async";
-  img.loading = "eager";
-  img.onload = markReady;
-  img.onerror = () => startFallback("Image preview failed");
-  stage.innerHTML = "";
-  stage.appendChild(img);
-  img.src = imageUrl;
-  setStatus(isZh() ? "\u6b63\u5728\u52a0\u8f7d\u9884\u89c8\u8d44\u6e90" : "Loading preview resource", "loading");
-  fallbackTimerId = window.setTimeout(() => {
-    void startFallback("Image preview timeout");
-  }, DIRECT_PREVIEW_FALLBACK_MS);
+    if (!isCurrent()) return;
+    stage.innerHTML = "";
+    stage.appendChild(img);
+    markReady();
+  } catch (error) {
+    if (!isCurrent()) return;
+    showPreviewError(stage, downloadButton, task, error.message || "Image preview failed");
+  }
 }
-
 
 function dataImageUrl(b64, format = "png") {
   const safeFormat = ["png", "jpeg", "jpg", "webp"].includes(String(format).toLowerCase())
