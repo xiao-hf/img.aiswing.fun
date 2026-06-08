@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050968";
+const build = "2026050969";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -24,7 +24,7 @@ const taskTtlHours = Number(process.env.TASK_TTL_HOURS || 48);
 const cleanupIntervalMs = Number(process.env.CLEANUP_INTERVAL_MINUTES || 10) * 60 * 1000;
 const keySecret = process.env.KEY_ENCRYPTION_SECRET || "change-this-secret-before-production";
 const imageAccessSecret = process.env.IMAGE_ACCESS_SECRET || keySecret;
-const workerConcurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 1));
+const workerConcurrency = Math.max(1, Number(process.env.WORKER_CONCURRENCY || 2));
 const upstreamPartialImagesRaw = Number(process.env.UPSTREAM_PARTIAL_IMAGES || 0);
 const upstreamPartialImages = Number.isFinite(upstreamPartialImagesRaw)
   ? Math.max(0, Math.min(3, Math.floor(upstreamPartialImagesRaw)))
@@ -229,6 +229,7 @@ const statements = {
   deleteTask: db.prepare("DELETE FROM tasks WHERE id = ?"),
   expiredTasks: db.prepare("SELECT id, result_path FROM tasks WHERE expires_at IS NOT NULL AND expires_at <= ? LIMIT 200"),
   pendingTasks: db.prepare("SELECT id FROM tasks WHERE status = 'pending' ORDER BY created_at ASC LIMIT ?"),
+  taskStatusCounts: db.prepare("SELECT status, COUNT(*) AS count FROM tasks GROUP BY status"),
 };
 
 function nowMs() {
@@ -553,6 +554,14 @@ function cleanupExpiredTasks() {
     statements.deleteTask.run(task.id);
   }
   return expired.length;
+}
+
+function taskStatusCounts() {
+  const counts = { pending: 0, running: 0, succeeded: 0, failed: 0 };
+  for (const row of statements.taskStatusCounts.all()) {
+    counts[row.status] = Number(row.count || 0);
+  }
+  return counts;
 }
 
 setInterval(() => {
@@ -1593,6 +1602,8 @@ const server = http.createServer((req, res) => {
       update_enabled: Boolean(updateToken),
       task_ttl_hours: taskTtlHours,
       worker_concurrency: workerConcurrency,
+      active_workers: activeWorkers,
+      task_counts: taskStatusCounts(),
       stream_upstream: streamUpstream,
       task_stream_mode: taskStreamMode,
       upstream_partial_images: upstreamPartialImages,
