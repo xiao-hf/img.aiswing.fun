@@ -16,7 +16,7 @@ const upstream = (process.env.UPSTREAM || "http://sub2api:8080").replace(/\/+$/,
 const streamUpstream = (process.env.STREAM_UPSTREAM || "https://cdn.aiswing.fun").replace(/\/+$/, "");
 const taskStreamMode = !["0", "false", "no", "off"].includes(String(process.env.TASK_STREAM_MODE || "false").trim().toLowerCase());
 const maxBodyBytes = Number(process.env.MAX_BODY_BYTES || 60 * 1024 * 1024);
-const build = "2026050970";
+const build = "2026061502";
 const dataDir = path.resolve(root, process.env.DATA_DIR || "data");
 const imageDir = path.join(dataDir, "images");
 const dbPath = process.env.SQLITE_PATH || path.join(dataDir, "aiswing.sqlite");
@@ -506,6 +506,20 @@ function isRetryableUpstreamError(error) {
   return /rate limit reached|upstream_error|upstream request failed|response\.failed|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
 }
 
+function shouldFallbackToAlternateImageRoute(error) {
+  if (!error) return false;
+  if (Number(error.status) === 401) return false;
+  const message = [
+    error.message,
+    error.code,
+    error.name,
+    error.stack,
+    error.cause?.message,
+    error.cause?.code,
+  ].filter(Boolean).join(" ");
+  return /temporarily unavailable|no available compatible accounts|not enabled for this group|upstream_error|response\.failed|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data|no final image/i.test(message);
+}
+
 function publicErrorMessage(error, fallback = "Task failed") {
   const raw = [
     error?.message,
@@ -834,10 +848,6 @@ function extractImageB64FromSseBuffer(text, includePartial = false) {
 }
 
 async function generateImageB64(payload, apiKey, onProgress = () => {}) {
-  if (taskStreamMode) {
-    return generateImageB64ViaResponsesStream(payload, apiKey, onProgress);
-  }
-
   const references = normalizeReferenceImages(payload.reference_images || payload.referenceImages || payload.images || payload.input_images);
   if (references.length) {
     const endpoint = "/v1/images/edits";
@@ -846,11 +856,33 @@ async function generateImageB64(payload, apiKey, onProgress = () => {}) {
     return readImageB64FromNodeStream(upstreamResponse, onProgress, endpoint);
   }
 
-  const endpoint = "/v1/images/generations";
-  const streamPayload = imagePayloadToImageEndpointPayload(payload);
-  const target = new URL(endpoint, upstream);
-  const upstreamResponse = await postJsonStream(target, streamPayload, apiKey);
-  return readImageB64FromNodeStream(upstreamResponse, onProgress, endpoint);
+  const routes = [
+    { name: "images", runner: () => generateImageB64ViaImagesEndpoint(payload, apiKey, onProgress) },
+    ...(taskStreamMode
+      ? [{ name: "responses", runner: () => generateImageB64ViaResponsesStream(payload, apiKey, onProgress) }]
+      : []),
+  ];
+
+  let lastError;
+  for (let index = 0; index < routes.length; index += 1) {
+    const route = routes[index];
+    try {
+      if (index > 0) onProgress(`fallback ${route.name}`);
+      return await route.runner();
+    } catch (error) {
+      lastError = error;
+      const nextRoute = routes[index + 1]?.name || "";
+      console.warn("[image route failed]", {
+        route: route.name,
+        next_route: nextRoute,
+        status: error?.status || "",
+        message: error?.message || String(error),
+      });
+      if (!nextRoute || !shouldFallbackToAlternateImageRoute(error)) break;
+    }
+  }
+
+  throw lastError;
 }
 
 async function generateImageB64ViaResponsesStream(payload, apiKey, onProgress = () => {}) {
@@ -863,16 +895,26 @@ async function generateImageB64ViaResponsesStream(payload, apiKey, onProgress = 
   return readImageB64FromNodeStream(upstreamResponse, (progress, previewB64 = "") => onProgress(progress, previewB64), "/v1/responses");
 }
 
+async function generateImageB64ViaImagesEndpoint(payload, apiKey, onProgress = () => {}) {
+  const endpoint = "/v1/images/generations";
+  const imagePayload = imagePayloadToImageEndpointPayload(payload);
+  const target = new URL(endpoint, upstream);
+  const upstreamResponse = await postJsonStream(target, imagePayload, apiKey, {
+    accept: "application/json, text/event-stream",
+  });
+  return readImageB64FromNodeStream(upstreamResponse, onProgress, endpoint);
+}
+
 function imagePayloadToImageEndpointPayload(payload) {
   const next = {
     model: payload.model || "gpt-image-2",
     prompt: payload.prompt || "",
-    size: payload.size || "1024x1024",
-    response_format: payload.response_format || "b64_json",
-    format: payload.format || payload.output_format || "png",
   };
-  if (payload.quality) next.quality = payload.quality;
-  if (payload.output_format) next.output_format = payload.output_format;
+  if (payload.size && payload.size !== "auto") next.size = payload.size;
+  if (payload.response_format && payload.response_format !== "b64_json") next.response_format = payload.response_format;
+  if (payload.quality && payload.quality !== "auto") next.quality = payload.quality;
+  if (payload.format && payload.format !== "png") next.format = payload.format;
+  if (payload.output_format && payload.output_format !== "png") next.output_format = payload.output_format;
   if (payload.partial_images !== undefined) next.partial_images = payload.partial_images;
   const refs = normalizeReferenceImages(payload.reference_images || payload.referenceImages || payload.images || payload.input_images);
   if (refs.length) next.reference_images = refs;
@@ -969,7 +1011,7 @@ function extractImageB64FromPlainJson(text, includePartial = false) {
   }
 }
 
-function postJsonStream(target, payload, apiKey) {
+function postJsonStream(target, payload, apiKey, options = {}) {
   return new Promise((resolve, reject) => {
     const client = target.protocol === "http:" ? http : https;
     const body = JSON.stringify(payload);
@@ -977,7 +1019,7 @@ function postJsonStream(target, payload, apiKey) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Accept": "text/event-stream",
+        "Accept": options.accept || "text/event-stream",
         "Authorization": `Bearer ${apiKey}`,
         "Content-Length": Buffer.byteLength(body),
         "Connection": "close",
@@ -1311,6 +1353,21 @@ async function forwardRawApi(req, res, requestUrl, body) {
   res.end(responseBody);
 }
 
+function buildProxyResponseHeaders(upstreamResponse, extraHeaders = {}) {
+  const responseHeaders = {};
+  upstreamResponse.headers.forEach((value, key) => {
+    const lower = key.toLowerCase();
+    if (["connection", "content-encoding", "content-length", "transfer-encoding"].includes(lower)) return;
+    responseHeaders[key] = value;
+  });
+  return {
+    ...responseHeaders,
+    "Access-Control-Allow-Origin": "*",
+    "Cache-Control": "no-store",
+    ...extraHeaders,
+  };
+}
+
 async function handleTasksApi(req, res, requestUrl) {
   if (req.method === "OPTIONS") {
     send(res, 204, "", {
@@ -1503,6 +1560,20 @@ async function proxyApi(req, res, requestUrl) {
     }
 
     const originalPayload = body.length ? JSON.parse(body.toString("utf8")) : {};
+    if (requestUrl.pathname === "/v1/images/generations") {
+      const resultB64 = await generateImageB64WithRetry(
+        `compat-${Date.now().toString(36)}`,
+        imagePayloadToImageEndpointPayload(originalPayload),
+        req.headers.authorization ? requireBearer(req) : "",
+        () => {},
+      );
+      sendJson(res, 200, {
+        created: Math.floor(Date.now() / 1000),
+        data: [{ b64_json: resultB64, revised_prompt: originalPayload.prompt || "" }],
+      });
+      return;
+    }
+
     const responsesPayload = imagePayloadToResponsesPayload(requestUrl.pathname, originalPayload);
     const shouldStreamToClient = requestUrl.pathname === "/v1/images/generations/events";
     const outputFormat = getOutputFormat(originalPayload);
