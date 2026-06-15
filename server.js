@@ -486,6 +486,7 @@ function retryProgressReason(error) {
   const message = publicErrorMessage(error, "").replace(/\s+/g, " ").trim();
   if (!message) return "";
   if (/rate limit/i.test(message)) return "rate limited";
+  if (/EAI_AGAIN|getaddrinfo|dns/i.test(message)) return "dns retry";
   if (/timeout|ETIMEDOUT|request timeout/i.test(message)) return "upstream timeout";
   if (/ended without final image data|no final image/i.test(message)) return "no final image";
   if (/stream disconnected|terminated|aborted|socket hang up|ECONNRESET/i.test(message)) return "stream disconnected";
@@ -503,7 +504,7 @@ function isRetryableUpstreamError(error) {
     error.cause?.message,
     error.cause?.code,
   ].filter(Boolean).join(" ");
-  return /rate limit reached|upstream_error|upstream request failed|response\.failed|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
+  return /rate limit reached|upstream_error|upstream request failed|response\.failed|eai_again|getaddrinfo|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data/i.test(message);
 }
 
 function shouldFallbackToAlternateImageRoute(error) {
@@ -517,7 +518,7 @@ function shouldFallbackToAlternateImageRoute(error) {
     error.cause?.message,
     error.cause?.code,
   ].filter(Boolean).join(" ");
-  return /temporarily unavailable|no available compatible accounts|not enabled for this group|upstream_error|response\.failed|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data|no final image/i.test(message);
+  return /temporarily unavailable|no available compatible accounts|not enabled for this group|upstream_error|response\.failed|eai_again|getaddrinfo|etimedout|econnrefused|enotfound|enetunreach|upstream stream disconnected|terminated|aborted|socket hang up|econnreset|timeout|ended without final image data|no final image/i.test(message);
 }
 
 function publicErrorMessage(error, fallback = "Task failed") {

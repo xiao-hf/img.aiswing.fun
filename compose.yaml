@@ -32,6 +32,9 @@ services:
       UPDATE_TIMEOUT_MS: ${UPDATE_TIMEOUT_MS:-600000}
     ports:
       - "${HOST_PORT:-8000}:3000"
+    dns:
+      - ${DOCKER_DNS_PRIMARY:-223.5.5.5}
+      - ${DOCKER_DNS_SECONDARY:-119.29.29.29}
     volumes:
       - ./data:/app/data
     networks:

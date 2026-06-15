@@ -9,6 +9,9 @@ services:
     restart: unless-stopped
     ports:
       - "${HOST_PORT:-8000}:3000"
+    dns:
+      - ${DOCKER_DNS_PRIMARY:-223.5.5.5}
+      - ${DOCKER_DNS_SECONDARY:-119.29.29.29}
     environment:
       - NODE_ENV=${NODE_ENV:-production}
       - HOST=${HOST:-0.0.0.0}
